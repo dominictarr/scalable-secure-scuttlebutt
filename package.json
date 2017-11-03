@@ -1,0 +1,19 @@
+{
+  "name": "scalable-secure-scuttlebutt",
+  "description": "",
+  "version": "1.0.0",
+  "homepage": "https://github.com/dominictarr/scalable-secure-scuttlebutt",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/dominictarr/scalable-secure-scuttlebutt.git"
+  },
+  "dependencies": {
+  },
+  "devDependencies": {
+  },
+  "scripts": {
+    "test": "set -e; for t in test/*.js; do node $t; done"
+  },
+  "author": "'Dominic Tarr' <dominic.tarr@gmail.com> (dominictarr.com)",
+  "license": "MIT"  
+}
