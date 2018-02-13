@@ -50,7 +50,7 @@ naive design: connect to everyone
 ---
 
 ``` js_exe
-//return require('./demos').centralized()
+return require('./demos').centralized()
 ```
 
 ---
@@ -63,22 +63,22 @@ naive design: connect to everyone
 ---
 
 ``` js_exe
-//return require('./demos').random()
+return require('./demos').random()
 ```
 
 ---
 
 # Rules for gossip flooding
 
-* retransmit _new_ messages
-* (except to peer that sent it to you)
-* don't retransmit messages you have already seen
+send _new_ messages to everyone that didn't send it to you
+
+(don't resend messages you already know!)
 
 ---
 
 # message passing diagram
 
-![]()
+![message passing diagram](./message-passing2.jpg)
 
 ---
 
@@ -89,14 +89,14 @@ O(messages*(spanning+2*redundant))
 ```
 ---
 
-# how many redundant connections?
+# how many redundant connections
 
-* 1: 100%
-* 2: 33%
-* 3: 20%
-* 4: 14%
-* 5: 11%
-* 10: 5%
+* 1: 0%
+* 2: 66%
+* 3: 80%
+* 4: 86%
+* 5: 89%
+* 10: 95%
 
 at 5 connections per peer, we use 9 times as much bandwidth
 ---
@@ -111,7 +111,7 @@ remove duplicate connections
 ---
 
 ``` js_exe
-//return require('./demos').spanning()
+return require('./demos').spanning()
 ```
 
 ---
@@ -156,7 +156,7 @@ return require('./demos').fragile()
 
 ---
 
-![switching back to eager]()
+![switching back to eager](./repair-lazy.jpg)
 
 ---
 
@@ -308,6 +308,7 @@ latency: replication in 1 or 2 round trips
 * backend: https://github.com/ssbc/scuttlebot
 
 ---
+
 
 
 
