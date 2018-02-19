@@ -144,7 +144,82 @@ this ends up no worse than fixed overhead per message.
 > received that message if they tell you (which is the purpose
 > that the vector clock handshake serves)
 
-## gossip broadcast with lazymode
+## broadcast
+
+It is obviously desirable that a communication network would
+carry messages quickly. For human to human text communication,
+latency within a few seconds is usually sufficient. However,
+most of the above replication strategies would be unviable
+with `poll_frequency` of a few seconds. Instead, instead of
+simple polling we make connections - when a new connection
+is formed we receive and old messages, via the above polling
+algorithms, but then we "stay on the line", and if our peer
+receives any additional messages they send those too.
+Thus, we our model becomes _sync then broadcast_.
+
+In the non-gossip models, we must eventually connect to every
+peer we subscribe to. It would be unviable to hold long term
+connections to every peer, as they may number in the thousands,
+and the overhead of a each connection would be too much for
+most user devices. But with gossip, we can connect to just a small
+number of peers at a time and still receive messages from many peers.
+
+## random spanned network
+
+N peers are randomly connected with K out going connections per peer.
+(outgoing, because each peer randomly chooses to connect to K other
+peers) the chance that the network is fully connected rapidly
+approaches 1 when K is greater than 2. For the network to broadcast a message,
+when a peer receives a message, if it is a new message, they send it to all their connected peers except the peer they received the message from.
+Consider a network with 3 peers and 2 connections each. A creates
+a new message and transmits a message to B and C, and B and C then
+transmit the message to each other. Thus the message is sent twice
+by A and once each by B and C. The total bandwidth used by the
+network is 4. Since A creates the message and there are only
+two other peers, only the transmissions to B and C are necessary,
+but B and C don't know that the other already has the message.
+
+simulating a broadcast in a random network with up to 20 connections
+per peer, and measuring hops, average hops, messages transferred
+
+|K|peers|hops|avg|msgs|inefficiency|
+|1|1000|14|6.657|999|1|
+|2|1000|7|3.657|2981|2.984|
+|3|1000|6|2.944|4947|4.952|
+|4|1000|5|2.842|6913|6.92|
+|5|1000|5|2.605|8861|8.87|
+|6|1000|5|2.515|10803|10.814|
+|7|1000|4|2.388|12731|12.744|
+|8|1000|4|2.361|14671|14.686|
+|9|1000|4|2.306|16605|16.622|
+|10|1000|4|2.193|18487|18.506|
+|11|1000|4|2.201|20357|20.377|
+|12|1000|4|2.136|22237|22.259|
+|13|1000|4|2.118|24163|24.187|
+|14|1000|4|2.118|25993|26.019|
+|15|1000|4|2.027|27877|27.905|
+|16|1000|4|2.008|29709|29.739|
+|17|1000|4|2.046|31567|31.599|
+|18|1000|4|1.994|33393|33.426|
+|19|1000|4|1.94|35281|35.316|
+|20|1000|4|1.933|37135|37.172|
+
+> note, with 1000 peers and one connection we only need to send
+999 messages because the first peer is the author of the message
+and did not need to send it.
+
+Note, with more than one connection, number of hops (which is
+the time taken for the last message to arrive) decreases slowly,
+but the average case decreases much quicker and the (bandwidth)
+inefficiency increases fastest.
+With K=2, nearly 3 times as many messages as necessary are sent.
+and with K=5, nearly 9 times too many messages are sent!
+
+If we prune the redundant connections, we could get low latency
+without bandwidth overhead. However, since a pure spanning
+tree has no redundency it's also very fragile.
+
+## spanning trees
 
 EBT + request skipping. EBT is optimization for long lived
 connections.
@@ -196,3 +271,63 @@ all unable to connect because the network has failed, but in a
 decentralized gossip network they can still connect to each other.
 
 > move this bit to another section? adapt models for to show
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
