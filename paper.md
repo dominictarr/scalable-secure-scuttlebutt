@@ -42,11 +42,11 @@ is polled, the amount of bandwidth needed scales badly.
 
 bandwith needed for a subscriber,
 
-O(poll_frequency*subscriptions*average_messages_per_feed)
+`O(poll_frequency*subscriptions*average_messages_per_feed)`
 
 and for the publisher,
 
-O(subscribers*poll_frequency*messages_per_feed)
+`O(subscribers*poll_frequency*messages_per_feed)`
 
 Clients may manage their bandwidth costs by reducing poll frequency,
 but this also reduces availability, so this design is not suitable for realtime communication.
@@ -64,11 +64,11 @@ limiting factor for subscribers with large numbers of subscriptions.
 the total number of network connections over some time period
 is for the subscriber:
 
-O(poll_frequency * subscribers)
+`O(poll_frequency * subscribers)`
 
 and the publisher
 
-O(poll_frequency * subscriptions)
+`O(poll_frequency * subscriptions)`
 
 This also has the disadvantage that
 popular publishers are not in control of how much bandwidth they
@@ -191,7 +191,7 @@ request skipping saves sending vector clocks elements for infrequently updating
 feeds, so a great deal less vector clock elements need be sent than in append-only gossip,
 especially when using high poll frequencies.
 
-O(messages + peers_connected_to*feeds_subscribed + poll_frequency/messages )
+`O(messages + peers_connected_to*feeds_subscribed + poll_frequency/messages )`
 
 There is now only one multiplicative factor in the bandwidth complexity.
 We must send the entire vector clock to each peer that we will connect to,
