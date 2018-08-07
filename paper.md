@@ -16,79 +16,127 @@ it's likely that another friend is also a friend.
 
 * _hub connections assumption_: short paths to hubs: some users are "hubs", being connected
 with a large number of other peers. Paths to even distant users
-are short due connections to hub. It's highly likely that
+are short due connections via hubs. It's highly likely that
 someone you know follows any given celebrity.
 
 ## comparison of replication algorithms.
 
-starting with the simplest, develop models of data replication.
-I basically just made up the O() notations...
-maybe this should be based on simulations instead?
+Starting with the simplest, develop models of data replication.
+>I basically just made up the O() notations... maybe this should be based on simulations instead?
 especially since some of my arguments depend on a certain factor
 being limited somewhat (by the nature of networks)
 
 ## polled scan: (RSS) Really Simple Syndication
 
-A user subscribes to a feed, and periodically requests
-that from the peer (server). At each request, the entire
-feed is downloaded. This is extremely simple to implement
-at the server end (providing a xml file over http is sufficient)
+A publisher creates a feed F, containing N messages `F[0...N]`
+Subscribers poll the publishers to which they are subscribed at a a frequency (f)
+of their choosing. At each request, the publisher sends the entire feed.
+This is extremely simple to implement at the server end (RSS provides an xml file over http)
 and slightly more complex at the client end (clients would
 need to diff new results with old results to decide
-whether new content has arrived).
+whether new content has arrived). If posts are fairly
+infrequent and smallish, text - images are referenced, not included in the response.
 
 Since this design redownloads all the messages each time a feed
 is polled, the amount of bandwidth needed scales badly.
 
-bandwidth needed:
+bandwith needed for a subscriber,
 
-`O(poll_frequency * feeds_subscribed * messages_per_feed)`
+O(poll_frequency*subscriptions*average_messages_per_feed)
 
-To manage the bandwidth, clients reduce availability by polling
-infrequently (making this system unsuitable for real time
-communication) or not sending all messages on each poll ruining
-eventually consistency (making this system more difficult to reason
-about). If the number of feeds_subscribed is very large (hundreds
-or thousands) then poll frequency needs to be diminished futher.
+and for the publisher,
 
-RSS also only serves feeds one at a time, necitating a network
-connection for each poll.
+O(subscribers*poll_frequency*messages_per_feed)
 
-connections needed:
+Clients may manage their bandwidth costs by reducing poll frequency,
+but this also reduces availability, so this design is not suitable for realtime communication.
 
-`O(poll_frequency * feeds_subscribed)`
+Since the publisher does not have control over how many subscribers there are,
+or what poll frequency they choose, the popular publishers may have significant
+bandwidth costs.
+
+In practice, RSS truncates the feed and may not send older messages,
+so isn't provably eventually consistent.
+
+Also, this model uses network connection per poll, which is be a
+limiting factor for subscribers with large numbers of subscriptions.
+
+the total number of network connections over some time period
+is for the subscriber:
+
+O(poll_frequency * subscribers)
+
+and the publisher
+
+O(poll_frequency * subscriptions)
 
 This also has the disadvantage that
 popular publishers are not in control of how much bandwidth they
 use. It's common for regular people to suddenly become very popular
-("going viral") so if all subscribers poll a publisher that
-could suddenly be very expensive for them.
+("going viral") which if excedes available resources leads to outages,
+and thus suddenly popular content can have availability problems.
 
 ## append-only poll
 
-Instead of sending all messages per poll, the requester
-gives the sequence number (or timestamp) of the latest message
-they know, and the sender only sends messages in that feed
-that are greater than that sequence. This adds a fixed overhead
-to each poll, but means that each message is only sent once to each peer.
+Messages in a feed have a total order defined by an always increasing
+value such as a sequence number or timestamp.
+Instead of sending all messages per poll, the subscriber requests all messages greater
+than the sequence number (or timestamp) of the latest message
+they currently have. This requires sending on a tiny header (the sequence number)
+and the publisher only sends each message to each subscriber once.
 
-bandwidth needed:
+Although we can resonably assume that the sequence number is significantly smaller
+than a message, `subscribers*poll_frequency` is high enough this can still be significant.
 
 `O(poll_frequency * feeds_subscribed + messages_per_feed)`
 
 The connections needed are the same as polled scan.
 
+For a suddenly popular publisher, many incoming requests can still lead to availability problems,
+as the simple number of requests becomes overwhelming.
+
 ## append-only gossip (scuttlebutt)
 
-In a gossip protocol, messages are passed along from peer to peer,
-without needing to go from publisher to subscriber directly.
-Instead of requesting one feed at a time, and giving a sequence number,
-instead request a "vector clock" - a map of `{feeds:sequences,...}`
+In a gossip protocol, instead of subscribers polling publishers,
+"peers" which can be both publisher and subscriber, connect to each other randomly.
+On each connection, peers send a map of their subscriptions -> latest sequence for that feed,
+and then if either peer has a more recent messages for any given feed, they send them to the other peer.
 
-This doesn't change the bandwidth complexity, but removes `feeds_subscribed`
-from the connections complexity.
+Since a connection now sends the list of subscriptions,
+but only needs to connect to a single peer each poll interval,
+more bandwidth is used per connection, but less connections are used.
+the overall bandwidth used by a peer is the same as with append-only poll,
+but the number of connections is now only `O(poll_frequency)`
 
-`O(poll_frequency)`
+Describing the time needed to disseminate a new message to all subscribers
+is now more complicated. In the first poll interval, it gets passed to only
+a single peer, but in the second poll interval, there are two peers able
+to disseminate the message. If they do not connect again, in the 3rd interval
+there will be 4 peers, and so on in powers of 2. However, as the number of peers
+with a given message increases the chance that two peers already both having the
+message increases too, and the rate of disemination decreases. Thus overall rate
+of disemination resembles a bell curve. Since calculating the actual rate of disemination
+is more complicated, and is affected by practical matters such as the probability that
+more that multiple peers connect a particular peer at once, instead of calculating
+the time, we take measurements from a simple simulation.
+
+The question of disemination of a single message is the same as flooding gossip.
+for a random network with 10,000 peers and each peer creating a connection to one
+other peer randomly each interval (so a given peer may receive zero or more incoming connections,
+but makes only one out going connection), the total number of intervals needed
+to diseminate a single message is very small compared to the number of peers.
+
+```
+round, dR, dT
+1, 9, 10
+2, 51, 61
+3, 293, 354
+4, 1195, 1549
+5, 3903, 5452
+6, 3875, 9327
+7, 666, 9993
+8, 7, 10000
+```
 
 In amazon dynamo, this protocol design is used to replicate
 membership information within a cluster of dynamo nodes.
@@ -97,64 +145,108 @@ all other peers. To add a peer to the network, that peer just
 needs to know any other peer. It's not necessary to inform
 any master node, and the cluster is highly resilient.
 
-Since peers pass on messages for other peers, it is not necessary
-for a publisher to be online at all times. subscribers can receive
-messages from any other peer that has them. Popular content
-could be distributed by it's fans to each other, flattening the
-bandwidth and connection complexity for publishers.
+This design has a significant advantage with availability.
+If a peer that originated a message goes offline, if they
+have diseminated a message to at least one other peer that message
+will continue to flood the network. If a publisher suddenly
+becomes very popular, it will not cost them extra resources,
+because it's the other peers which will provide the disemination.
+
+However, this does have the drawback that this design is only
+usable in applications were the set of subscribers to any one publisher
+are reasonably known. However, I agrue that the probability of sharing
+mutual interests and mutual friends is high, this is a reasonable assumption
+for social network applications.
 
 ## append-only gossip with request skipping
 
-In append-only gossip, a {id,sequence} pair is sent for every
-subscription, on every connection. because of the power law assumption,
-on most connections few of the feeds will have updated.
-The probability of not seeing any new messages in a poll
-increases with poll_frequency. In request skipping,
-a peer remembers the maximum sequence for each feed requested
-by a peer and stores it. When they reconnect with that peer,
-if they do not know about a more recent message for that feed,
-they do not request it. The remote peer also does this,
-and if they do have a newer message, they will include it in their
-vector clock, and the the local peer sends a partial clock,
-with their sequence number and the remote sends the new messages.
+In practice, activity in most datasets follows a power law.
+some authors are highly prolific, but most only publish rarely.
+Thus, it is likely that when two peers exchange a vector clock in
+append-only gossip, the majority of feeds mentioned have not changed.
+The chance that no new messages are sent during a connection increases
+with poll_frequency.
 
-On the first connection between two peers, each peers sends a
-full vector clock, but on subsequent connections, they send
-far smaller clocks, because of the power law assumption.
+In request-skipping we introduce an optimization to avoid unnecessary requests.
+On each connection & exchange, each peer remembers the maximum sequence number for each feed a
+peer requested. The second time any two peers connect and after, each peer compares
+their current vector clock with the stored clock for their peer, and only sends the fields
+that have changed since the last connection. If of two peers A and B, if A has a new message and
+B does not, B will not mention that in their feed, but A will. On receiving A's partial clock,
+B will respond with a partial clock containing their current sequence, and A will then know they are ahead.
 
-O(messages + peers*feeds_subscribed + poll_frequency/messages )
+In the worst case, between two given peers exchanging a single feed,
+the first time they connect they both exchange a full vector clock,
+and between each subsequent connection one peer receives a new message,
+sends an additional vector clock element for that feed, and receives the old
+vector clock element in response and then sends the message. Since involves sending
+2 vector clock elements per message. However, this can only happen when the poll frequency
+is smaller or equal to the message frequency. Since the exchange is two sided,
+the maximum number of vector clock elements a peer will send is one per message.
+This is a significant improvement over append-only gossip, as the factor becomes message frequency
+not poll frequency. poll frequency can be set as high as desired to maximize availability.
 
-If peers connected to each other fully randomly across the entire
-network, then peers*feed_subscribed would become a large factor.
-But instead of connecting randomly, we follow the tendency for
-local connections and only replicate with peers socially close,
-thus `peers` can be sufficiently low that this design
-scales very well for replicating social feeds.
-`poll_frequency` is now divided my `messages` because on very
-high poll_frequencies, a peer will send a {id:sequence} for each
-additional message, but lower `poll_frequencies` will get many
-messages for a single clock element.
+It is expected that in practice, message frequency differs greatly by feed.
+request skipping saves sending vector clocks elements for infrequently updating
+feeds, so a great deal less vector clock elements need be sent than in append-only gossip,
+especially when using high poll frequencies.
 
-because the local connections assumption keeps `peers` low,
-and the power law assumption means most requests can be skipped,
-this ends up no worse than fixed overhead per message.
+O(messages + peers_connected_to*feeds_subscribed + poll_frequency/messages )
+
+There is now only one multiplicative factor in the bandwidth complexity.
+We must send the entire vector clock to each peer that we will connect to,
+the first time we connect to them. However, luckily, to get provable eventual
+consistency, we do not actually need to connect to every peer. As messages
+are relayed, we only need the eventual connections to form a connected graph, not for each peer to eventually connect.
+consequently, a value for `peers_connected_to` can be smaller than the whole swarm.
+
+Simulating random networks with varying numbers of random connections, the measured probability that
+the graph is fully connected rapidly approaches 1 as the average number of connected peers passes 2.
+As the number of edges continues to rise, the distance across the graph (and thus disemination rate)
+drops.
+
+```
+edges, P(connected), average, stdev
+1, 0.05, 57.26, 19.385365614297818
+1.1, 0.46, 23.33, 2.549725475418886
+1.2, 0.69, 18.1, 1.6763054614240047
+1.3, 0.7, 15.08, 1.188949115816149
+1.4, 0.8, 13.52, 1.2765578717786399
+1.5, 0.91, 12.33, 0.8130805618141443
+1.6, 0.9, 11.45, 0.82915619758885
+1.7, 0.96, 10.59, 0.8011866199581761
+1.8, 0.97, 9.83, 0.6333245613427602
+1.9, 0.99, 9.29, 0.4958830507287036
+2, 1, 8.72, 0.5306599664568481
+3, 1, 6.91, 0.2861817604250792
+5, 1, 5.39, 0.48774993593029137
+10, 1, 4.59, 0.4918333050943186
+20, 1, 4, 0
+```
+
+I would suggest using a fixed number of connections per peer in the range 5-10,
+this effectively gaurantees a fully connected network, and smaller disemination rate,
+without scaling the number of full vector clocks to be sent by very much.
+
+Also note, this design requires storage of vector clocks, so reducing the number
+of peers connected to also keeps that within acceptable bounds.
 
 > note, the remote clock is not updated when you _send_ a message,
 > only when you _receive_ one, because only know a peer really
 > received that message if they tell you (which is the purpose
 > that the vector clock handshake serves)
 
-## broadcast
+## realtime broadcast
 
 It is obviously desirable that a communication network would
 carry messages quickly. For human to human text communication,
 latency within a few seconds is usually sufficient. However,
 most of the above replication strategies would be unviable
-with `poll_frequency` of a few seconds. Instead, instead of
-simple polling we make connections - when a new connection
-is formed we receive and old messages, via the above polling
-algorithms, but then we "stay on the line", and if our peer
-receives any additional messages they send those too.
+with `poll_frequency` of a few seconds. Instead, of
+simple polling we make connections with a longer lifespan -
+when a new connection is formed we receive and old messages,
+via the above polling algorithms, but then we "stay on the line",
+and if our peer receives any additional messages they send those too.
 Thus, we our model becomes _sync then broadcast_.
 
 In the non-gossip models, we must eventually connect to every
@@ -168,11 +260,13 @@ number of peers at a time and still receive messages from many peers.
 
 N peers are randomly connected with K out going connections per peer.
 (outgoing, because each peer randomly chooses to connect to K other
-peers) the chance that the network is fully connected rapidly
-approaches 1 when K is greater than 2. For the network to broadcast a message,
-when a peer receives a message, if it is a new message, they send it to all their connected peers except the peer they received the message from.
-Consider a network with 3 peers and 2 connections each. A creates
-a new message and transmits a message to B and C, and B and C then
+peers) as discussed in the previous section, the chance that the network
+is fully connected rapidly approaches 1 when K is greater than 2.
+For the network to broadcast a message,
+when a peer receives a message, if they have not already seen this message
+ they send it to all their connected peers except the peer they received
+the message from. Consider a network with 3 peers and 2 connections each.
+A creates a new message and transmits a message to B and C, and B and C then
 transmit the message to each other. Thus the message is sent twice
 by A and once each by B and C. The total bandwidth used by the
 network is 4. Since A creates the message and there are only
@@ -210,23 +304,57 @@ and did not need to send it.
 
 Note, with more than one connection, number of hops (which is
 the time taken for the last message to arrive) decreases slowly,
-but the average case decreases much quicker and the (bandwidth)
+but the average case, time for 50% of the network to receive the message,
+decreases much quicker and the (bandwidth)
 inefficiency increases fastest.
 With K=2, nearly 3 times as many messages as necessary are sent.
 and with K=5, nearly 9 times too many messages are sent!
 
-If we prune the redundant connections, we could get low latency
+So with a simple flooding design, we pay a lot in bandwidth for reducing latency.
+
+If we were to prune the redundant connections, we could get low latency
 without bandwidth overhead. However, since a pure spanning
-tree has no redundency it's also very fragile.
+tree has no redundency it's also very fragile. If one connection close
+to the root of the tree (the originator of a message) fails, all downstream
+peers will be cut off.
 
 ## spanning trees
 
-EBT + request skipping. EBT is optimization for long lived
-connections.
+Epidemic broadcast trees is an algorithim to form a spanning tree from
+a random network, but instead of completely removing redundant connections,
+they are just moved into a _lazy_ or _pull_ state. When in the lazy state,
+only headers (equivalent to vector clock elements) are sent. Which connections
+are redundant can be detected by each peer observing the order in which they
+first receive a message. And thereafter observing latency. For example, in the
+3 node network discussed in the previous section, A transmits a message to B and C,
+neither of them have received this message before, so they know that their connection
+to A is not redundant. Then, they each receive a second copy of the message from B,C
+so they both know that for messages from A, the connection between B-C is redundant.
+So, B sends a short message to C asking to disable that connection (for messages from A)
+(C also sends a similar request to A). When A broadcasts another message, B and C receive
+it directly from A again, but since the redundant connections are disabled, they do not
+transmit it again. Instead, they only send a short message, equivalent to a vector clock
+element, to indicate they know this message exists. If later, the connection between
+A and C breaks, and A broadcasts another message. It will only be received by B.
+B then sends the short lazy check to C, who then realizes that this is the first they
+have heard about this message - theirfore, B must now be closer to the source than they are.
+C then sends a message to rerequest active transmission of messages from A, and B sends
+the message to C. (note, reestablishing an active connection takes just one roundtrip)
+
+EBT still sends redundant data, but the notes sent along the redundant connections
+are significantly smaller than the messages. Also, if a delay is introduced,
+it is not necessary to send a note for every message, but just the latest message.
+If several are received in quick succession, only one note needs to be sent.
+Also, if a random factor, somewhat greater than round trip time is added,
+then 50% of the time the same note is received before it is sent.
+
+For example, B and C receive the message from A at approximately the same time,
+if B decides to wait one second, and C waits two seconds, and the note from B to C arrives in
+0.1 seconds, C knows that B already knows about that message, and now does not need to send a note back.
 
 # singleton hub
 
-to this point, most social networks have been implemented
+To this point, most social networks have been implemented
 along a star shaped network. Essentially one peer that distributes
 all messages to all peers. If this was designed around a replication
 protocol, a client would use something like the append-only poll,
@@ -271,62 +399,6 @@ all unable to connect because the network has failed, but in a
 decentralized gossip network they can still connect to each other.
 
 > move this bit to another section? adapt models for to show
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
