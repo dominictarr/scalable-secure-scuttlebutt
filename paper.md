@@ -341,6 +341,8 @@ have heard about this message - theirfore, B must now be closer to the source th
 C then sends a message to rerequest active transmission of messages from A, and B sends
 the message to C. (note, reestablishing an active connection takes just one roundtrip)
 
+![redundant messages](./images/redundant.svg)
+
 EBT still sends redundant data, but the notes sent along the redundant connections
 are significantly smaller than the messages. Also, if a delay is introduced,
 it is not necessary to send a note for every message, but just the latest message.
