@@ -8,12 +8,16 @@
     "url": "git://github.com/dominictarr/scalable-secure-scuttlebutt.git"
   },
   "dependencies": {
+    "statistics": "^3.3.0"
   },
   "devDependencies": {
+    "graphreduce": "^3.0.4",
+    "hyperscript": "^2.0.2",
+    "network-animator": "^1.0.0"
   },
   "scripts": {
     "test": "set -e; for t in test/*.js; do node $t; done"
   },
   "author": "'Dominic Tarr' <dominic.tarr@gmail.com> (dominictarr.com)",
-  "license": "MIT"  
+  "license": "MIT"
 }
