@@ -277,6 +277,7 @@ simulating a broadcast in a random network with up to 20 connections
 per peer, and measuring hops, average hops, messages transferred
 
 |K|peers|hops|avg|msgs|inefficiency|
+|-|-----|----|---|----|------------|
 |1|1000|14|6.657|999|1|
 |2|1000|7|3.657|2981|2.984|
 |3|1000|6|2.944|4947|4.952|
