@@ -19,6 +19,31 @@ with a large number of other peers. Paths to even distant users
 are short due connections via hubs. It's highly likely that
 someone you know follows any given celebrity.
 
+## data models
+
+We use a simple data model that fits fairly well any social media application.
+the main resource is a _feed_, which is an append-only log of _messages_.
+Each feed has strictly a single author. Each peer is the publisher of their own feed,
+and the subscriber to zero or more other feeds.
+
+Each feed is an append-only log of messages, and each message contains
+the id of the feed, an always incrementing sequence number, and some content.
+(also, the hash of the previous message and a signature, but this paper focuses
+on the performance of our design, not the security, so we can leave that out for now)
+
+```
+Feed f = [{id:f.id, sequence, content},...]
+```
+A peer is usually the author of at least one feed, but may be a "lurker" who does not post.
+In this paper we can assume that each peer is the author of one feed and that the peer's id
+is also the id of that feed.
+
+Each peer is also a subscriber to their own, and zero or more other feeds.
+
+```
+Peer p = {id:p.id, feeds: { <id>: [msg,...] }}
+```
+
 ## comparison of replication algorithms.
 
 Starting with the simplest, develop models of data replication.
@@ -28,53 +53,76 @@ being limited somewhat (by the nature of networks)
 
 ## polled scan: (RSS) Really Simple Syndication
 
-A publisher creates a feed F, containing N messages `F[0...N]`
-Subscribers poll the publishers to which they are subscribed at a a frequency (f)
-of their choosing. At each request, the publisher sends the entire feed.
+A publisher (`pub`, of type `Peer`) hosts content, and a subscriber (`sub`, also of type `Peer`)
+connect and the publisher sends their content.
+
+At each request, the publisher sends the entire feed.
+
+> (footnote: In practice, RSS truncates the feed and may not send older messages,
+so isn't provably eventually consistent, we've analyzed a simplified version,
+which has provable eventual consistency.)
+
 This is extremely simple to implement at the server end (RSS provides an xml file over http)
-and slightly more complex at the client end (clients would
-need to diff new results with old results to decide
-whether new content has arrived). If posts are fairly
-infrequent and smallish, text - images are referenced, not included in the response.
+and slightly more complex at the client end, as clients append only the new values.
+It's assumed that messages are fairly small, text only, and large files are referenced as some sort of link.
 
-Since this design redownloads all the messages each time a feed
-is polled, the amount of bandwidth needed scales badly.
+When a subscriber connects, the publisher replies `received = pub.feeds[pub.id]`
+(which means sending `pub.feeds[pub.id].length` messages)
+the subscriber then appends any new messages to their copy of that feed.
+`sub.feeds[pub.id].append(received[sub.feeds[pub.id].length...])` such that both copies of the feed are the same,
+that is, contain copies of the same messages. `sub.feed[pub.id] == pub.feed[pub.id]`
 
-bandwith needed for a subscriber,
+new messages are published over time, and so the subscriber periodically makes a request to each publisher.
 
-`O(poll_frequency*subscriptions*average_messages_per_feed)`
+```
+interval(sub.pollFrequency, () => sub.feeds.each(id => sub.connect(id)) )
+```
+
+So, every `sub.pollFrequency` all publishers are connected to and all messages from them are downloaded,
+old messages end up being sent many times unnecessarily, so the amount of bandwidth needed scales very badly.
+
+bandwith needed for a subscriber can be calculated as the following:
+
+> (footnote: assume that `pollFrequency` is number of polls
+within the given timeframe that we are calculating resource usage for. The important thing is how many polls are made.
+If we were to calculate usage per day, and there was one poll per day, pollFrequency is 1. In any case, we are
+more interested in exploring the relationship between the various design factors and resources used, so the important
+thing to observe here is that the total resource used is _multiplied_ by `pollFrequency`, doubling `pollFrequency` doubles
+the number of messages sent)
+
+```
+messages_per_feed = sum(map(sub.feeds, id => sub.feeds[id].length)) / sub.feeds.length
+sub.pollFrequency*sub.feeds.length*message_per_feed
+```
 
 and for the publisher,
 
-`O(subscribers*poll_frequency*messages_per_feed)`
+```
+subscribers = sum(peers, peer => peer.feeds[pub.id] ? 1 : 0 ))
+avg_poll_frequency = sum(peers, peer => peer.feeds[pub.id] ? peer.pollFrequency : 0 )) / subscribers
 
-Clients may manage their bandwidth costs by reducing poll frequency,
-but this also reduces availability, so this design is not suitable for realtime communication.
+subscribers*avg_poll_frequency*pub.feed[pub.id].length
+```
 
-Since the publisher does not have control over how many subscribers there are,
-or what poll frequency they choose, the popular publishers may have significant
-bandwidth costs.
+Clients have a tradeoff between bandwidth and latency. Either they use lots of bandwidth
+or wait a long time for new messages. So this design is not suitable for realtime communication.
 
-In practice, RSS truncates the feed and may not send older messages,
-so isn't provably eventually consistent.
+For publishers, this design also suffers from uncontrollable expenses. If there are suddenly
+many subscribers, or they set their pollFrequency very high, this increases costs for the
+publisher, which in practice will lead to outages. Thus the most popular content is the most
+likely to be unavailable, which is the opposite of what is needed.
 
-Also, this model uses network connection per poll, which is be a
-limiting factor for subscribers with large numbers of subscriptions.
+Also, this model uses a network connection per poll, is likely to be a
+limiting factor for publishers with large numbers of subscriptions.
 
 the total number of network connections over some time period
 is for the subscriber:
 
-`O(poll_frequency * subscribers)`
+`avg_poll_frequency * sub.feeds.length`
 
 and the publisher
 
-`O(poll_frequency * subscriptions)`
-
-This also has the disadvantage that
-popular publishers are not in control of how much bandwidth they
-use. It's common for regular people to suddenly become very popular
-("going viral") which if excedes available resources leads to outages,
-and thus suddenly popular content can have availability problems.
+`poll_frequency * subscriptions`
 
 ## append-only poll
 
@@ -417,6 +465,20 @@ topology. If two peers are offline, but nearby each other, it is possible for th
 directly over bluetooth, wifi, or by directly exchanging physical media. This means secure-scuttlebutt
 is potentially able to service remote areas of the earth that have not yet received modern infrastructure,
 as well as areas where that infrastructure is disrupted by warfare or other disasters.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
