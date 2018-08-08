@@ -91,9 +91,11 @@ thing to observe here is that the total resource used is _multiplied_ by `pollFr
 the number of messages sent)
 
 ```
-messages_per_feed = sum(map(sub.feeds, id => sub.feeds[id].length)) / sub.feeds.length
-sub.pollFrequency*sub.feeds.length*message_per_feed
+total_messages = sum(map(sub.feeds, id => sub.feeds[id].length))
+sub.pollFrequency*total_messages
 ```
+each interval, the subscriber polls every publisher, and receives all messages.
+Hense the total set of messages is redownloaded every interval.
 
 and for the publisher,
 
@@ -127,21 +129,51 @@ and the publisher
 ## append-only poll
 
 Messages in a feed have a total order defined by an always increasing
-value such as a sequence number or timestamp.
+value such as a sequence, such that any message's sequence is strictly greater
+than any preceding message. If the sequence number of the first message is 1,
+then the number of messages in the feed (`feed.length`) is also the sequence number of the last item.
+
+> (footnote: By sending messages in order, if a transmission fails part way,
+the requester's copy of the feed is still a valid append only log with no gaps - but their latest
+message is just not the true latest message. Next time they connect they will receive the missing messages.)
+
 Instead of sending all messages per poll, the subscriber requests all messages greater
-than the sequence number (or timestamp) of the latest message
-they currently have. This requires sending on a tiny header (the sequence number)
+than the sequence number of the latest message they currently have.
+This requires sending on a tiny header (the sequence number)
 and the publisher only sends each message to each subscriber once.
 
+the publisher expects a sequence number, and returns any messages greater than that.
+```
+pub.serve(n => pub.feeds[pub.id][n...])
+```
+
+the subscriber connects to a pub, and appends the messages the pub returns to their copy,
+
+``
+received = sub.connect(pub.id, sub.feeds[pub.id].length)
+sub.feeds[pub.id].append(received)
+```
+now the subscriber is consistent with the publisher.
+
+> (footnote: the publisher sends the messages in order, so if a connection fails part way
+through, the subscriber's copy still has sequential messages
+
+The cost for the subscriber is as follows
+
+```
+sub.pollFrequency * sub.feeds.length + total_messages
+```
+
+This is a significant improvement over polled-scan because each message is only downloaded once.
+However, the subscriber must still send their current sequence number to each publisher, on each poll.
 Although we can resonably assume that the sequence number is significantly smaller
-than a message, `subscribers*poll_frequency` is high enough this can still be significant.
+than a message, if the pollFrequency or sub.feeds.length is high this can become significant.
 
-`O(poll_frequency * feeds_subscribed + messages_per_feed)`
-
-The connections needed are the same as polled scan.
+The number of connections needed are the same as polled scan.
 
 For a suddenly popular publisher, many incoming requests can still lead to availability problems,
-as the simple number of requests becomes overwhelming.
+as the simple number of requests becomes overwhelming, although because the entire feed of messages
+does not need to be sent the practical limit is much higher.
 
 ## append-only gossip (scuttlebutt)
 
@@ -156,19 +188,32 @@ more bandwidth is used per connection, but less connections are used.
 the overall bandwidth used by a peer is the same as with append-only poll,
 but the number of connections is now only `O(poll_frequency)`
 
-Describing the time needed to disseminate a new message to all subscribers
-is now more complicated. In the first poll interval, it gets passed to only
-a single peer, but in the second poll interval, there are two peers able
+```
+peer.serve(clock => mapValues(clock, (id, sequence) => peer.feeds[id][sequence...]))
+```
+
+```
+each(
+  peer.connect(random_peer.id, map(peer.feeds, id => peer.feeds[id].length )),
+  (id, new) => peer.feeds[id].append(new)
+)
+```
+
+Because messages are no longer passed directly from the publisher to each subscriber,
+describing the time needed to disseminate a new message is more complicated.
+In the first poll interval, the publisher will be connected to at least 1 other peer.
+(the publisher makes 1 outgoing connection, but may receive any number of incoming connections)
+If it gets passed to only a single peer, but in the second poll interval, there are now two peers able
 to disseminate the message. If they do not connect again, in the 3rd interval
 there will be 4 peers, and so on in powers of 2. However, as the number of peers
-with a given message increases the chance that two peers already both having the
+with a given message increases the chance that any two connecting peers already both have the
 message increases too, and the rate of disemination decreases. Thus overall rate
-of disemination resembles a bell curve. Since calculating the actual rate of disemination
+of disemination resembles an S curve. Since calculating the actual rate of disemination
 is more complicated, and is affected by practical matters such as the probability that
 more that multiple peers connect a particular peer at once, instead of calculating
 the time, we take measurements from a simple simulation.
 
-The question of disemination of a single message is the same as flooding gossip.
+The pattern of disemination of a single message is the same as flooding gossip.
 for a random network with 10,000 peers and each peer creating a connection to one
 other peer randomly each interval (so a given peer may receive zero or more incoming connections,
 but makes only one out going connection), the total number of intervals needed
@@ -465,20 +510,4 @@ topology. If two peers are offline, but nearby each other, it is possible for th
 directly over bluetooth, wifi, or by directly exchanging physical media. This means secure-scuttlebutt
 is potentially able to service remote areas of the earth that have not yet received modern infrastructure,
 as well as areas where that infrastructure is disrupted by warfare or other disasters.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
