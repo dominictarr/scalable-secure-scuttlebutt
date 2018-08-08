@@ -357,11 +357,24 @@ if B decides to wait one second, and C waits two seconds, and the note from B to
 
 # singleton hub
 
+> note: to make the strongest arguement for the performance of ebt+request skipping,
+> compare it to a fully centralized model.
+
 To this point, most social networks have been implemented
 along a star shaped network. Essentially one peer that distributes
 all messages to all peers. If this was designed around a replication
 protocol, a client would use something like the append-only poll,
-except they would request the sequence number representing
+except the server would remember each client's vector clock at each timestamp,
+all their subscriptions, and the client would only send the time the last synced.
+The server would then send all new messages on any of their subscriptions.
+
+On each connection, the client needs to send their last connection time,
+and the server still has to send each message. If a client polls at low rate,
+the client sends one header and receives many messages. If the client
+polls at a high rate, maybe they make one request per message. (long lived
+connections would also help here)
+
+they would request the sequence number representing
 their own read feed, on each connection they'd request any messages
 that have occured since the last connection, but the central server
 still has to send the messages.
@@ -379,30 +392,31 @@ and connections:
 If a network is successful, network_clients can easily get very very
 large. millions or billions of clients.
 
-An ideal centralized network is only slightly more efficient,
-but has the problem that a single entity is burdened with the
-vast majority of the costs for running the network.
+## conclusion
 
-In the optimized decentralized protocol, all peers pay a cost in
-proportion to their use (which they did anyway, as clients to a
-centralized network), but they also get very significant
-reliability gains.
+An idealized centralized network is presented as the best possible in efficiency,
+yet it only beats our design by a constant factor. Between EBT with a fixed number
+of peers and request-skipping, we can manage the bandwidth performance, but the main difference
+is only in vector clock elements, which are very small compared to messages.
 
-In practice the small difference in overall cost is likely
-to be overwhelmed by practical details such as sending updates
-to the code or social/political factors such as the feelings
-of the users towards the singleton's owners.
+In the current secure-scuttlebutt implementation, which uses base64 encoded strings to
+encode 256 bit public keys plus a base 10 integer, vector clock elements are about 60 bytes,
+and the average message is 660 bytes (although maximum message is 8kb) so the average message is 11 times
+bigger than a single vector clock element.
 
-It's relative rare that a well implemented centralized system
-fails (since they use distributed systems designs, with a wall around it)
-but it's very frequent that the parts of the whole system fails in
-the last mile. The central hub may still be running, but you cannot
-connect to it. Other peers of the network could be in the same room,
-all unable to connect because the network has failed, but in a
-decentralized gossip network they can still connect to each other.
+I would expect, that for a typical peer, most messages would be replicated after being offline for a while,
+so one vector clock element brings in many messages. For messages replicated in real time,
+the extra bandwidth used is managed by limiting the number of connections.
 
-> move this bit to another section? adapt models for to show
-
+The performance of our design is close enough to the optimal centralized system to realistically
+argue that it's viable at massive scale. In practice, we believe that small difference will easily
+be made up by all the other advantages by adopting a decentralized system.
+For example, the significant costs associated with running such a system are now spread around the
+network participants evenly. With a fully decentralized gossip protocol, peers can join in any
+topology. If two peers are offline, but nearby each other, it is possible for them to share data
+directly over bluetooth, wifi, or by directly exchanging physical media. This means secure-scuttlebutt
+is potentially able to service remote areas of the earth that have not yet received modern infrastructure,
+as well as areas where that infrastructure is disrupted by warfare or other disasters.
 
 
 
