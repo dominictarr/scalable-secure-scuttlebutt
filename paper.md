@@ -19,6 +19,15 @@ with a large number of other peers. Paths to even distant users
 are short due connections via hubs. It's highly likely that
 someone you know follows any given celebrity.
 
+For simplicity, we model the following replication protocol designs in the context of connected random swarms.
+In practice, we do not want a design that replicates all messages in the entire network (especially because
+we intend it to scale to millions of users). For social media applications, users view the feeds of they
+have explicitly followed/friended. However, due to the strongly connected nature of the social graph
+(they primary way people meet is being introduced to friend of friends) the chance of having a considerable
+overlap in your follow graph with any friends is quite high. Thus, the simpler to model random network is a reasonable
+approximation to friend replication in a real social network - how good this approximation is is discussed in
+**TODO: write this** section.
+
 ## data models
 
 We use a simple data model that fits fairly well any social media application.
@@ -192,10 +201,13 @@ but the number of connections is now only `O(poll_frequency)`
 peer.serve(clock => mapValues(clock, (id, sequence) => peer.feeds[id][sequence...]))
 ```
 
+to connect a particular random peer, the connecting peer a map of `{<id>:<length>,...}`
+and receives a list of messages
+
 ```
 each(
   peer.connect(random_peer.id, map(peer.feeds, id => peer.feeds[id].length )),
-  (id, new) => peer.feeds[id].append(new)
+  (msg) => peer.feeds[msg.id].append(msg)
 )
 ```
 
@@ -260,42 +272,88 @@ append-only gossip, the majority of feeds mentioned have not changed.
 The chance that no new messages are sent during a connection increases
 with poll_frequency.
 
-In request-skipping we introduce an optimization to avoid unnecessary requests.
-On each connection & exchange, each peer remembers the maximum sequence number for each feed a
-peer requested. The second time any two peers connect and after, each peer compares
-their current vector clock with the stored clock for their peer, and only sends the fields
-that have changed since the last connection. If of two peers A and B, if A has a new message and
-B does not, B will not mention that in their feed, but A will. On receiving A's partial clock,
-B will respond with a partial clock containing their current sequence, and A will then know they are ahead.
+_request-skipping_ is an optimization to avoid unnecessary requests, it requires storing
+the received clock from remote peers, but saves sending large headers.
+On the first connection between two peers, the entire clock is sent, but on subsequent connections,
+the current clock is compared with the remote clock previously recieved, and only the fields that differ are sent.
 
-In the worst case, between two given peers exchanging a single feed,
-the first time they connect they both exchange a full vector clock,
-and between each subsequent connection one peer receives a new message,
-sends an additional vector clock element for that feed, and receives the old
-vector clock element in response and then sends the message. Since involves sending
-2 vector clock elements per message. However, this can only happen when the poll frequency
-is smaller or equal to the message frequency. Since the exchange is two sided,
-the maximum number of vector clock elements a peer will send is one per message.
-This is a significant improvement over append-only gossip, as the factor becomes message frequency
-not poll frequency. poll frequency can be set as high as desired to maximize availability.
+```
+//first connection
+local_clock = map(peer.feeds, id => peer.feeds[id].length )
+//take the stored remote clock, or an empty clock if this is the first connection.
+remote_clock = peer.clocks[remote.id] || {}
+conn = peer.connect(remote.id)
+
+conn.send(filter(local_clock, (id, seq) => remote_clock[id] != IGNORE && remote_clock[id] != seq))
+
+remote_clock2 = conn.recv()
+remote_clock = peer.clocks[remote.id] = merge(remote_clock, remote_clock2)
+
+//if they have requested feeds we did not send, send our current seq for those feeds.
+conn.send(map(
+  filter(remote_clock2, (id, seq) => local_clock[id] != seq),
+  id => local_clock[id] or IGNORE
+))
+
+//finally, send any needed messages
+conn.send(mapValues(remote_clock, (id, seq) => if local_clock[id] > seq && seq != IGNORE then peer.feeds[id][seq...]))
+each(conn.recv(), msg => peer.feeds[msg.author].append(msg))
+```
+
+`IGNORE` is a special value used to indicate that the remote has requested a feed that we choose not to replicate.
+It is necessary to make a definite response in this case, because this enables the remote to remember we are not interested
+in this feed, and so they will avoid requesting this feed next time they respond.
+
+Once we receive the remote's clock and have compared it to the stored copy,
+we can calculate everything that needs to be send or received. In practice,
+long lived connections are used, and we allow new clocks to be sent at any time,
+but for simplicity of describing the algorithm we represent it here as having 5 phases:
+send initial clock, receive remote clock, send response clock, send messages, receive messages.
+
+> (footnote: It is essential that we only update our record of the remote clock with data they have explicitly sent
+us, and _not_ based on the messages we have sent them. It is possible that a connection fails before
+our peer receives a message, but if they send us something we know they ment it.)
+
+If peers A and B are consistent with respect to feed X, neither will mention X the next time they connect.
+However, if either peer receives a new message in X, one of them will mention it and the other will respond,
+and the first will send the message. If both receive the new message before they next reconnect, they'll both
+mention it, but see they are at the same message and not send it.
+
+If peer A requests a feed id X that B has not chosen to replicate, they will send `IGNORE` for that id.
+then A will record `A.clocks[B.id][X] = IGNORE`, but B will store the sequence that B requested.
+IGNORE is never sent in the initial clock, only in the response. If B later chooses to replicate X,
+they'll check their current sequence (which may be 0) against the stored clock for B (which won't be IGNORE)
+and so will send it in the initial clock. B will then see that A's no longer ignoring X, and will respond with their
+sequence for X. If A doesn't change their mind about X, B will never mention it again.
+
+The worst case, for two given peers exchanging a single feed, is when the poll frequency
+is greater or equal to the frequency that new messages are added. This means that each
+peer sends a vector clock element for every message added to that feed, so the maximum
+number of vector clock elements is the same as the number of messages sent. If the poll
+frequency is lower than the message frequency, efficiency increases as each vector clock
+element will correspond to potentially many messages. Since this at worse a constant
+factor of the number of messages, it's within acceptable bounds and poll frequency can be
+selected for maximum availability without trading off bandwidth usage.
 
 It is expected that in practice, message frequency differs greatly by feed.
 request skipping saves sending vector clocks elements for infrequently updating
 feeds, so a great deal less vector clock elements need be sent than in append-only gossip,
 especially when using high poll frequencies.
 
-`O(messages + peers_connected_to*feeds_subscribed + poll_frequency/messages )`
+`messages + peers_connected_to*peer.feeds.length + peer.pollFrequency/messages`
 
 There is now only one multiplicative factor in the bandwidth complexity.
 We must send the entire vector clock to each peer that we will connect to,
 the first time we connect to them. However, luckily, to get provable eventual
 consistency, we do not actually need to connect to every peer. As messages
-are relayed, we only need the eventual connections to form a connected graph, not for each peer to eventually connect.
-consequently, a value for `peers_connected_to` can be smaller than the whole swarm.
+are relayed, we only need the eventual connections to form a connected graph,
+_not_ for each peer to eventually connect. Consequently, a value for
+`peers_connected_to` can be somewhat smaller than the whole swarm.
 
-Simulating random networks with varying numbers of random connections, the measured probability that
-the graph is fully connected rapidly approaches 1 as the average number of connected peers passes 2.
-As the number of edges continues to rise, the distance across the graph (and thus disemination rate)
+Simulating random networks with varying numbers of random connections, the
+measured probability that the graph is fully connected rapidly approaches 1
+as the average number of connected peers passes 2. As the number of edges
+continues to rise, the distance across the graph (and thus disemination rate)
 drops.
 
 ```
@@ -318,16 +376,11 @@ edges, P(connected), average, stdev
 ```
 
 I would suggest using a fixed number of connections per peer in the range 5-10,
-this effectively gaurantees a fully connected network, and smaller disemination rate,
+would effectively gaurantee a fully connected network, and small disemination rate,
 without scaling the number of full vector clocks to be sent by very much.
 
 Also note, this design requires storage of vector clocks, so reducing the number
 of peers connected to also keeps that within acceptable bounds.
-
-> note, the remote clock is not updated when you _send_ a message,
-> only when you _receive_ one, because only know a peer really
-> received that message if they tell you (which is the purpose
-> that the vector clock handshake serves)
 
 ## realtime broadcast
 
@@ -510,4 +563,28 @@ topology. If two peers are offline, but nearby each other, it is possible for th
 directly over bluetooth, wifi, or by directly exchanging physical media. This means secure-scuttlebutt
 is potentially able to service remote areas of the earth that have not yet received modern infrastructure,
 as well as areas where that infrastructure is disrupted by warfare or other disasters.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
