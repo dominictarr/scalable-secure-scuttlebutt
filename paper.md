@@ -43,6 +43,7 @@ on the performance of our design, not the security, so we can leave that out for
 ```
 Feed f = [{id:f.id, sequence, content},...]
 ```
+
 A peer is usually the author of at least one feed, but may be a "lurker" who does not post.
 In this paper we can assume that each peer is the author of one feed and that the peer's id
 is also the id of that feed.
@@ -158,7 +159,7 @@ pub.serve(n => pub.feeds[pub.id][n...])
 
 the subscriber connects to a pub, and appends the messages the pub returns to their copy,
 
-``
+```
 received = sub.connect(pub.id, sub.feeds[pub.id].length)
 sub.feeds[pub.id].append(received)
 ```
@@ -388,11 +389,14 @@ It is obviously desirable that a communication network would
 carry messages quickly. For human to human text communication,
 latency within a few seconds is usually sufficient. However,
 most of the above replication strategies would be unviable
-with `poll_frequency` of a few seconds. Instead, of
-simple polling we make connections with a longer lifespan -
-when a new connection is formed we receive and old messages,
-via the above polling algorithms, but then we "stay on the line",
-and if our peer receives any additional messages they send those too.
+with `poll_frequency` of a few seconds, not to mention, establishing
+a TCP connection has overhead, and several extra messages must be
+passed to make that an encrypted TCP connection. So, instead of
+simple polling, we should have connections with a longer lifespan -
+when a new connection is formed we exchange clocks and receive any
+old messages we are mssing, via the above polling algorithms,
+but then we "stay on the line", and if our peer receives any
+additional messages they send those too.
 Thus, we our model becomes _sync then broadcast_.
 
 In the non-gossip models, we must eventually connect to every
@@ -402,14 +406,15 @@ and the overhead of a each connection would be too much for
 most user devices. But with gossip, we can connect to just a small
 number of peers at a time and still receive messages from many peers.
 
-## random spanned network
+## random connected network
 
-N peers are randomly connected with K out going connections per peer.
+N peers are randomly connected with average K outgoing connections per peer.
 (outgoing, because each peer randomly chooses to connect to K other
 peers) as discussed in the previous section, the chance that the network
-is fully connected rapidly approaches 1 when K is greater than 2.
-For the network to broadcast a message,
-when a peer receives a message, if they have not already seen this message
+is fully connected rapidly approaches 1 when as K approaches 2, and
+then the average shortest path between nodes shortens as redundant connections increase.
+For the network to broadcast a message, the originating peer sends it to all
+neighbouring peers, and when a peer receives a _new_ message,
  they send it to all their connected peers except the peer they received
 the message from. Consider a network with 3 peers and 2 connections each.
 A creates a new message and transmits a message to B and C, and B and C then
@@ -563,28 +568,4 @@ topology. If two peers are offline, but nearby each other, it is possible for th
 directly over bluetooth, wifi, or by directly exchanging physical media. This means secure-scuttlebutt
 is potentially able to service remote areas of the earth that have not yet received modern infrastructure,
 as well as areas where that infrastructure is disrupted by warfare or other disasters.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
