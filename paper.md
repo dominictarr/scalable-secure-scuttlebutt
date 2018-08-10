@@ -273,10 +273,12 @@ append-only gossip, the majority of feeds mentioned have not changed.
 The chance that no new messages are sent during a connection increases
 with poll_frequency.
 
-_request-skipping_ is an optimization to avoid unnecessary requests, it requires storing
-the received clock from remote peers, but saves sending large headers.
+_request-skipping_ is an optimization to avoid making feed requests if it seems unlikely
+that a feed has changed, it requires storing the received clock from remote peers,
+but saves sending many headers after the first connection.
+
 On the first connection between two peers, the entire clock is sent, but on subsequent connections,
-the current clock is compared with the remote clock previously recieved, and only the fields that differ are sent.
+the current clock is compared with the stored copy of the remote clock, and only the feeds that differ are sent.
 
 ```
 //first connection
@@ -382,6 +384,37 @@ without scaling the number of full vector clocks to be sent by very much.
 
 Also note, this design requires storage of vector clocks, so reducing the number
 of peers connected to also keeps that within acceptable bounds.
+
+## overlapping replication sets
+
+So far, we have analyzed the problem space as if all peers under consideration
+are replicating the same set of publishers. In some application designs it
+may make sense for all peers to replicate the same set of feeds, for example,
+in a task tracking system within a medium sized company or other organization.
+On the other hand, the really interesting use-cases are ones that scale to millions
+of users, and so it might not feasible to replicate all their data on the average device,
+even if you did want to. In secure-scuttlebutt, the target application is a social network.
+This provides an interesting middle ground, with both a fair amount of overlap and a
+reasonable expectation of it. Since one of primary ways that people meet new friends
+is by meeting friends of friends. These encounters might be more or less formal,
+but never the less, the chance that any two friends have a number of mutual friends in
+common is fairly high.
+
+In the most conservative design, it might be desired to replicate only the direct
+friends "followed" by the user. If the follow graph is known, a set of replication
+peers can be carefully selected to ensure coverage of all follows. For each feed
+a remote peer follows that the local peer does not, an feed id and IGNORE will be sent,
+but after that, subsequent requests for that feed will be skipped.
+
+In the current secure-scuttlebutt design, by default peers replicate their friends,
+and the friends of their friends. Sampling the actual ssb data, choosing 5 random
+peers to replicate, and replicating feeds two hops out on the follow graph (friends,
+and friends of friends), in all samples, the all the direct friends of the user were
+within 2 hop range of the 5 random peers, also on average ~75% (TODO: GRAPHS THESE)
+of friends of friend were replicated by at least one peer. Since in ssb, this could
+be more carefully optimized, peers selected carefully to maximize coverage, but also,
+since request skipping means we'll only send headers for unreplicated feeds one time,
+we can just connect to more random feeds and still get acceptable efficiency.
 
 ## realtime broadcast
 
@@ -568,4 +601,20 @@ topology. If two peers are offline, but nearby each other, it is possible for th
 directly over bluetooth, wifi, or by directly exchanging physical media. This means secure-scuttlebutt
 is potentially able to service remote areas of the earth that have not yet received modern infrastructure,
 as well as areas where that infrastructure is disrupted by warfare or other disasters.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
