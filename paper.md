@@ -202,7 +202,7 @@ but the number of connections is now only `O(poll_frequency)`
 peer.serve(clock => mapValues(clock, (id, sequence) => peer.feeds[id][sequence...]))
 ```
 
-to connect a particular random peer, the connecting peer a map of `{<id>:<length>,...}`
+to connect a particular random peer, the connecting peer sends a map of `{<id>:<length>,...}`
 and receives a list of messages
 
 ```
@@ -223,11 +223,11 @@ with a given message increases the chance that any two connecting peers already 
 message increases too, and the rate of disemination decreases. Thus overall rate
 of disemination resembles an S curve. Since calculating the actual rate of disemination
 is more complicated, and is affected by practical matters such as the probability that
-more that multiple peers connect a particular peer at once, instead of calculating
+multiple peers connect a particular peer at once, instead of calculating
 the time, we take measurements from a simple simulation.
 
 The pattern of disemination of a single message is the same as flooding gossip.
-for a random network with 10,000 peers and each peer creating a connection to one
+For a random network with 10,000 peers and each peer creating a connection to one
 other peer randomly each interval (so a given peer may receive zero or more incoming connections,
 but makes only one out going connection), the total number of intervals needed
 to diseminate a single message is very small compared to the number of peers.
@@ -253,10 +253,10 @@ any master node, and the cluster is highly resilient.
 
 This design has a significant advantage with availability.
 If a peer that originated a message goes offline, if they
-have diseminated a message to at least one other peer that message
+have disseminated a message to at least one other peer that message
 will continue to flood the network. If a publisher suddenly
 becomes very popular, it will not cost them extra resources,
-because it's the other peers which will provide the disemination.
+because it's the other peers which will provide the dissemination.
 
 However, this does have the drawback that this design is only
 usable in applications were the set of subscribers to any one publisher
@@ -315,7 +315,7 @@ send initial clock, receive remote clock, send response clock, send messages, re
 
 > (footnote: It is essential that we only update our record of the remote clock with data they have explicitly sent
 us, and _not_ based on the messages we have sent them. It is possible that a connection fails before
-our peer receives a message, but if they send us something we know they ment it.)
+our peer receives a message, but if they send us something we know they meant it.)
 
 If peers A and B are consistent with respect to feed X, neither will mention X the next time they connect.
 However, if either peer receives a new message in X, one of them will mention it and the other will respond,
@@ -341,7 +341,7 @@ is greater or equal to the frequency that new messages are added. This means tha
 peer sends a vector clock element for every message added to that feed, so the maximum
 number of vector clock elements is the same as the number of messages sent. If the poll
 frequency is lower than the message frequency, efficiency increases as each vector clock
-element will correspond to potentially many messages. Since this at worse a constant
+element will correspond to potentially many messages. Since this at worst a constant
 factor of the number of messages, it's within acceptable bounds and poll frequency can be
 selected for maximum availability without trading off bandwidth usage.
 
@@ -386,7 +386,7 @@ edges, P(connected), average, stdev
 ```
 
 I would suggest using a fixed number of connections per peer in the range 5-10,
-would effectively gaurantee a fully connected network, and small disemination rate,
+would effectively guarantee a fully connected network, and small disemination rate,
 without scaling the number of full vector clocks to be sent by very much.
 
 Also note, this design requires storage of vector clocks, so reducing the number
@@ -416,7 +416,7 @@ but after that, subsequent requests for that feed will be skipped.
 In the current secure-scuttlebutt design, by default peers replicate their friends,
 and the friends of their friends. Sampling the actual ssb data, choosing 5 random
 peers to replicate, and replicating feeds two hops out on the follow graph (friends,
-and friends of friends), in all samples, the all the direct friends of the user were
+and friends of friends), in all samples, all the direct friends of the user were
 within 2 hop range of the 5 random peers, also on average ~75% (TODO: GRAPHS THESE)
 of friends of friend were replicated by at least one peer. Since in ssb, this could
 be more carefully optimized, peers selected carefully to maximize coverage, but also,
@@ -528,7 +528,7 @@ transmit it again. Instead, they only send a short message, equivalent to a vect
 element, to indicate they know this message exists. If later, the connection between
 A and C breaks, and A broadcasts another message. It will only be received by B.
 B then sends the short lazy check to C, who then realizes that this is the first they
-have heard about this message - theirfore, B must now be closer to the source than they are.
+have heard about this message - therefore, B must now be closer to the source than they are.
 C then sends a message to rerequest active transmission of messages from A, and B sends
 the message to C. (note, reestablishing an active connection takes just one roundtrip)
 
@@ -547,7 +547,7 @@ if B decides to wait one second, and C waits two seconds, and the note from B to
 
 # singleton hub
 
-> note: to make the strongest arguement for the performance of ebt+request skipping,
+> note: to make the strongest argument for the performance of ebt+request skipping,
 > compare it to a fully centralized model.
 
 To this point, most social networks have been implemented
@@ -555,7 +555,7 @@ along a star shaped network. Essentially one peer that distributes
 all messages to all peers. If this was designed around a replication
 protocol, a client would use something like the append-only poll,
 except the server would remember each client's vector clock at each timestamp,
-all their subscriptions, and the client would only send the time the last synced.
+all their subscriptions, and the client would only send the time they last synced.
 The server would then send all new messages on any of their subscriptions.
 
 On each connection, the client needs to send their last connection time,
