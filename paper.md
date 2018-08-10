@@ -222,7 +222,7 @@ with a given message increases the chance that any two connecting peers already 
 message increases too, and the rate of dissemination decreases. Thus overall rate
 of dissemination resembles an S curve. Since calculating the actual rate of dissemination
 is more complicated, and is affected by practical matters such as the probability that
-more that multiple peers connect a particular peer at once, instead of calculating
+multiple peers connect a particular peer at once, instead of calculating
 the time, we take measurements from a simple simulation.
 
 The pattern of dissemination of a single message is the same as flooding gossip.
@@ -340,7 +340,7 @@ is greater or equal to the frequency that new messages are added. This means tha
 peer sends a vector clock element for every message added to that feed, so the maximum
 number of vector clock elements is the same as the number of messages sent. If the poll
 frequency is lower than the message frequency, efficiency increases as each vector clock
-element will correspond to potentially many messages. Since this at worse a constant
+element will correspond to potentially many messages. Since this at worst a constant
 factor of the number of messages, it's within acceptable bounds and poll frequency can be
 selected for maximum availability without trading off bandwidth usage.
 
@@ -556,7 +556,7 @@ along a star shaped network. Essentially one peer that distributes
 all messages to all peers. If this was designed around a replication
 protocol, a client would use something like the append-only poll,
 except the server would remember each client's vector clock at each timestamp,
-all their subscriptions, and the client would only send the time the last synced.
+all their subscriptions, and the client would only send the time they last synced.
 The server would then send all new messages on any of their subscriptions.
 
 On each connection, the client needs to send their last connection time,
@@ -609,16 +609,6 @@ topology. If two peers are offline, but nearby each other, it is possible for th
 directly over bluetooth, wifi, or by directly exchanging physical media. This means secure-scuttlebutt
 is potentially able to service remote areas of the earth that have not yet received modern infrastructure,
 as well as areas where that infrastructure is disrupted by warfare or other disasters.
-
-
-
-
-
-
-
-
-
-
 
 
 
