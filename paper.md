@@ -322,12 +322,19 @@ However, if either peer receives a new message in X, one of them will mention it
 and the first will send the message. If both receive the new message before they next reconnect, they'll both
 mention it, but see they are at the same message and not send it.
 
-If peer A requests a feed id X that B has not chosen to replicate, they will send `IGNORE` for that id.
-then A will record `A.clocks[B.id][X] = IGNORE`, but B will store the sequence that B requested.
+If peer A requests a feed id X that B has not chosen to replicate, B receives `X:<seq>` from A,
+and will reply with`X:IGNORE`.
+A will store `A.clocks[B.id][X] = IGNORE`, and B will store `B.clocks[A.id][X] = <seq>`.
 IGNORE is never sent in the initial clock, only in the response. If B later chooses to replicate X,
-they'll check their current sequence (which may be 0) against the stored clock for B (which won't be IGNORE)
-and so will send it in the initial clock. B will then see that A's no longer ignoring X, and will respond with their
-sequence for X. If A doesn't change their mind about X, B will never mention it again.
+the next time they connect to A, they'll check their current sequence (which will be 0 at the time they choose
+to replicate X),
+against the stored clock for B. They'll see that it's different and send `X:0`
+in the initial clock. A will then see that B is no longer ignoring X, and will respond with their
+sequence for X. If B doesn't change their mind about X, A will never mention it again.
+
+> (footnote: in the case that B decides to replicate X, but somehow ends up with the same sequence
+that A has for X, then they won't mention it, however, sooner or later, they will receive a new
+message in X from someone else, and after this will mention it to A)
 
 The worst case, for two given peers exchanging a single feed, is when the poll frequency
 is greater or equal to the frequency that new messages are added. This means that each
@@ -515,8 +522,7 @@ first receive a message. And thereafter observing latency. For example, in the
 neither of them have received this message before, so they know that their connection
 to A is not redundant. Then, they each receive a second copy of the message from B,C
 so they both know that for messages from A, the connection between B-C is redundant.
-So, B sends a short message to C asking to disable that connection (for messages from A)
-(C also sends a similar request to A). When A broadcasts another message, B and C receive
+So, B and C exchange short messages each requesting the other to disable that connection (for messages from A). When A broadcasts another message, B and C receive
 it directly from A again, but since the redundant connections are disabled, they do not
 transmit it again. Instead, they only send a short message, equivalent to a vector clock
 element, to indicate they know this message exists. If later, the connection between
@@ -601,6 +607,8 @@ topology. If two peers are offline, but nearby each other, it is possible for th
 directly over bluetooth, wifi, or by directly exchanging physical media. This means secure-scuttlebutt
 is potentially able to service remote areas of the earth that have not yet received modern infrastructure,
 as well as areas where that infrastructure is disrupted by warfare or other disasters.
+
+
 
 
 
