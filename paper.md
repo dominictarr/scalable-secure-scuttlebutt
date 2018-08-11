@@ -188,28 +188,36 @@ does not need to be sent the practical limit is much higher.
 
 In a gossip protocol, instead of subscribers polling publishers,
 "peers" which can be both publisher and subscriber, connect to each other randomly.
-On each connection, peers send a map of their subscriptions -> latest sequence for that feed,
-and then if either peer has a more recent messages for any given feed, they send them to the other peer.
+On each connection, instead of requesting a single feed, peers send a "vector clock".
+Instead of representing a global sequence, a vector clock just includes the sequence on each
+peer that contributed to the state. A peer's current vector clock is just a map of the lastest
+sequence of each feed:
+
+```
+vector_clock = map(peer.feeds, id => peer.feeds[id].length)
+```
+
+When a peer receives the remote vector clock, they can simply calculate whether there are
+any messages they need to send and send them.
+
+```
+peer.serve(clock => mapValues(clock, (id, sequence) => peer.feeds[id][sequence...]))
+```
+
+A client just connects to a random peer, sends their clock, and appends messages they receive
+
+```
+each(
+  peer.connect(random_peer.id, vector_clock),
+  msg => peer.feeds[msg.id].append(msg)
+)
+```
 
 Since a connection now sends the list of subscriptions,
 but only needs to connect to a single peer each poll interval,
 more bandwidth is used per connection, but less connections are used.
 The overall bandwidth used by a peer is the same as with append-only poll,
 but the number of connections is now only `O(poll_frequency)`.
-
-```
-peer.serve(clock => mapValues(clock, (id, sequence) => peer.feeds[id][sequence...]))
-```
-
-To connect a particular random peer, the connecting peer a map of `{ <id>: <length>, ... }`
-and receives a list of messages.
-
-```
-each(
-  peer.connect(random_peer.id, map(peer.feeds, id => peer.feeds[id].length)),
-  msg => peer.feeds[msg.id].append(msg)
-)
-```
 
 Because messages are no longer passed directly from the publisher to each subscriber,
 describing the time needed to disseminate a new message is more complicated.
@@ -267,7 +275,7 @@ for social network applications.
 
 In practice, activity in most datasets follows a power law:
 some authors are highly prolific, but most only publish rarely.
-Thus, it is likely that when two peers exchange a vector clock (TODO introduce) in
+Thus, it is likely that when two peers exchange a vector clock in
 append-only gossip, the majority of feeds mentioned have not changed.
 The chance that no new messages are sent during a connection increases
 with `poll_frequency`.
@@ -609,7 +617,6 @@ topology. If two peers are offline, but nearby each other, it is possible for th
 directly over bluetooth, wifi, or by directly exchanging physical media. This means secure-scuttlebutt
 is potentially able to service remote areas of the earth that have not yet received modern infrastructure,
 as well as areas where that infrastructure is disrupted by warfare or other disasters.
-
 
 
 
