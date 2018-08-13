@@ -265,11 +265,93 @@ will continue to flood the network. If a publisher suddenly
 becomes very popular, it will not cost them extra resources,
 because it's the other peers which will provide the dissemination.
 
-However, this does have the drawback that this design is only
-usable in applications were the set of subscribers to any one publisher
-are reasonably known. However, I argue that the probability of sharing
-mutual interests and mutual friends is high, this is a reasonable assumption
-for social network applications.
+## update frequency, overlap, and peer selection
+
+In Amazon Dynamo, scuttlebutt replication is used as a subcomponent
+of the whole system - to keep track of the membership in the
+database cluster, and what range of the database each node is
+responsible for. When database requests come to a node, that
+information is used to route the request to nodes which can handle
+it. Each node therefore needs to replicate _all information_ about
+membership in the cluster, and also, that information must be kept
+continually up to date. Each node emits a regular heartbeat and
+this is gossiped across the cluster, and the other nodes use this
+information to calculate the probability that a given node is still
+active - thus wether requests should be routed to it.
+
+Other applications using are likely to differ in terms of whether
+peers need to replicate the entire dataset, or the regularity with
+which they broadcast updates, or both. For example, a chat
+application combines messages from everyone one in the "room", so
+each peer replicates the entire dataset, but each peer only
+writes messages to the chat as frequently or infrequently as they
+choose to. It's quite likely that a few peers write very frequently
+and others read but do not write, or write very little.
+
+Indeed, in most real world applications, not all updates are
+created on a regular basis. There may be a small number of people
+you communicate with frequently - the closest family and friends,
+but then a broad range of aquaintances that you speak with
+occasionally. This pattern, known as a power-law distribution,
+is frequently found in both natural and artificial phenomena.
+Books and Movies are dominated by a small amount of best sellers,
+but also a large number of cult classics, flops, or break-evens.
+Most companies fail in the first few years, but a small number
+become so successful that it offsets venture investments
+in all the companies that fail. Likewise, it's reasonable to
+expect that most applications, if they do not have an explicitly
+regular update pattern, such as a enviromental sensor, will
+probably have activity following a power law, in the distribution
+of updates. However, if many peers have only infrequent update,
+it's likely that any two peers will exchange vector
+clocks with mostly the same values, and this is wasted bandwidth.
+
+The other question, what portion of the dataset should be replicated
+to each node? Another question, is what data should be distributed to each node.
+In Dynamo, or the chat room, the replicated data is replicated to
+all nodes, but in most other applications, it's not really diserable
+for all peers to have all data. For example, in email, the only peers that really need a particular
+message are the sender and the receiver (mail forwarding agents are a necessary evil)
+
+Email is probably not suited to a replication pattern, as only
+the recipient and sender are intended to have a use for a given
+message, and email has enough problems with spam that replicating
+3rd party messages seems strange. On the other hand, social media,
+seems extremely well-suited to a replication design: firstly,
+content is already log-oriented. typically, users explicitly
+"follow" or "friend" each other, and the main user interface element
+is viewing a combined feed of all follow's messages. "shares"
+are broadcast, usually intended to be read by all followers/friends.
+Each peer may want to only replicate their friend's data, but
+since the main way of meeting new friends is by meeting your friend's
+friends, there is a good chance that any friend also holds messages
+you wish to replicate.
+
+If less than the entire dataset is to be replicated to each peer,
+this also raises the question of _which peers to connect to?_
+in email, this is not an easy question to answer, as any one knowing
+your email address can send you messages. On the other hand,
+social media applications present an elegant answer to this question:
+The peers you follow are the peers you should connect to, you
+are likely to share mutual friends with them, and thus they are
+likely to have the feeds you are looking for, and want the feeds
+you have.
+
+A social media application provides good an simple ways
+to both choose a partial dataset to replicate and choose who to
+replicate it with, and because of the high degree of connectivity
+of the social graph, it seems extremely likely that such an
+application built on top of an efficient gossip replication protocol
+could easily scale to an unlimited number of users. Provided
+the implementation can scale to the needs of most individual users,
+each user's data overlaps with their friends, and thus the network
+could easily cover the entire globe.
+
+The design we come up with here could be used in any application
+that needs to replicate data with a few thousand peers, wether
+the dataset be shared fully, or having a well defined overlap.
+We present a social media application only as a relatively
+flexible base-architecture.
 
 ## append-only gossip with request-skipping
 
@@ -277,6 +359,11 @@ In practice, activity in most datasets follows a power law:
 some authors are highly prolific, but most only publish rarely.
 Thus, it is likely that when two peers exchange a vector clock in
 append-only gossip, the majority of feeds mentioned have not changed.
+
+> (footnote: Indeed, this became a practical problem in secure-scuttlebutt,
+on each connection, each peer sending over half a megabyte of requests,
+yet not actually needing to send any messages.)
+
 The chance that no new messages are sent during a connection increases
 with `poll_frequency`.
 
@@ -617,6 +704,29 @@ topology. If two peers are offline, but nearby each other, it is possible for th
 directly over bluetooth, wifi, or by directly exchanging physical media. This means secure-scuttlebutt
 is potentially able to service remote areas of the earth that have not yet received modern infrastructure,
 as well as areas where that infrastructure is disrupted by warfare or other disasters.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
