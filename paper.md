@@ -30,28 +30,24 @@ approximation to friend replication in a real social network - how good this app
 
 ## data models
 
-We use a simple data model that well describes any social media application.
-The main resource is a _feed_, which is an append-only log of _messages_.
-Each feed has strictly a single author. Each peer is the publisher of their own feed,
-and the subscriber to zero or more other feeds.
+We use a simple data model that fits most social media application.
+The main resource is a _feed_, which is an append-only log of _messages_,
+without branches. Each peer may publish zero or more feeds, and subscribe
+to zero or more feeds.
 
-Each feed is an append-only log of messages, and each message contains
-the id of the feed, an always incrementing sequence number, and some content.
-(Also, the hash of the previous message and a signature, but this paper focuses
-on the performance of our design, not the security, so we can leave that out for now.)
+Each message contains the id of the feed, an always increasing sequence number,
+and some content. (Also, the hash of the previous message and a signature, but this paper focuses
+on the performance of our design, not the security, so we can leave this out of discussion for now)
 
 ```
-Feed f = [{ id: f.id, sequence, content }, ...]
+Feed f = {id: f.id, log: [{ id: f.id, sequence, content }, ...]}
 ```
 
-A peer is usually the author of at least one feed, but may be a "lurker" who does not post.
 In this paper we can assume that each peer is the author of one feed and that the peer's id
-is also the id of that feed.
-
-Each peer is also a subscriber to their own, and zero or more other feeds.
+is also the id of that feed. The peer also stores the log of all the peers that it subscribes to.
 
 ```
-Peer p = { id: p.id, feeds: { <id>: [msg,...] } }
+Peer p = { id: p.id, feeds: { <id>: f } }
 ```
 
 ## comparison of replication algorithms.
@@ -307,8 +303,7 @@ it's likely that any two peers will exchange vector
 clocks with mostly the same values, and this is wasted bandwidth.
 
 The other question, what portion of the dataset should be replicated
-to each node? Another question, is what data should be distributed to each node.
-In Dynamo, or the chat room, the replicated data is replicated to
+to each node? In Dynamo, or the chat room, the replicated data is replicated to
 all nodes, but in most other applications, it's not really diserable
 for all peers to have all data. For example, in email, the only peers that really need a particular
 message are the sender and the receiver (mail forwarding agents are a necessary evil)
@@ -704,33 +699,6 @@ topology. If two peers are offline, but nearby each other, it is possible for th
 directly over bluetooth, wifi, or by directly exchanging physical media. This means secure-scuttlebutt
 is potentially able to service remote areas of the earth that have not yet received modern infrastructure,
 as well as areas where that infrastructure is disrupted by warfare or other disasters.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
