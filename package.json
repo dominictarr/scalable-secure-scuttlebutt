@@ -13,6 +13,7 @@
   "devDependencies": {
     "graphreduce": "^3.0.4",
     "hyperscript": "^2.0.2",
+    "marked": "^4.0.16",
     "network-animator": "^1.0.0"
   },
   "scripts": {
