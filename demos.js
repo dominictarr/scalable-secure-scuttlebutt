@@ -7,11 +7,19 @@ var random = require('network-animator/random')
 
 var W = 600, H = 600
 
+function delay (fn) {
+  setTimeout(fn, 1000)
+}
+
 function canvas () {
   return h('canvas', {width: W, height: H})
 }
 
 function starter (fn) {
+  return function () {
+    return fn(()=>false)
+
+  }
   var stopped = false
   function stop () {
     return stopped
@@ -69,7 +77,7 @@ exports.centralized = starter(function (stop) {
         delete g[packets[i].to][packets[i].from]
       }
     label.textContent = e + '/' + packets.length
-    if(!stop()) animate(g, loc, c.getContext('2d'), next)
+    delay(function () { animate(g, loc, c.getContext('2d'), next) })
   })
   return h('div', c, label)
 })
@@ -88,7 +96,7 @@ exports.random = starter(function (stop) {
     for(var i in packets)
       if(packets[i].extra) e ++
     label.textContent = e + '/' + packets.length
-    if(!stop()) animate(g, loc, c.getContext('2d'), next)
+    delay(function () { animate(g, loc, c.getContext('2d'), next) })
   })
   return h('div', c, label)
 })
@@ -123,7 +131,7 @@ exports.grid = starter(function (stop) {
     for(var i in packets)
       if(packets[i].extra) e ++
     label.textContent = e + '/' + packets.length
-    if(!stop()) animate(g, loc, c.getContext('2d'), next)
+    delay(function () { animate(g, loc, c.getContext('2d'), next) })
   })
   return h('div', c, label)
 
@@ -144,7 +152,7 @@ exports.spanning = starter(function () {
         delete g[packets[i].to][packets[i].from]
       }
     label.textContent = e + '/' + packets.length
-    if(!stop()) animate(g, loc, c.getContext('2d'), next)
+    delay(function () { animate(g, loc, c.getContext('2d'), next) })
   })
   return h('div', c, label)
 
@@ -178,6 +186,7 @@ exports.fragile = starter(function () {
 
       label.textContent = e + '/' + packets.length
       if(!stop()) animate(g, loc, c.getContext('2d'), next)
+//      delay(function () { animate(g, loc, c.getContext('2d'), next) })
     })
 
   //})()
@@ -185,18 +194,25 @@ exports.fragile = starter(function () {
 
 })
 
+var cmd = process.argv[2]
 
-if(!module.parent && exports[process.argv[2]])
-  document.body.appendChild(exports[process.argv[2]]())
+
+document.body.appendChild(h('div',
+  Object.keys(exports).map(name => {
+    return h('div',
+      h('h1', name),
+      exports[name](),
+      h('hr')
+    )
+  })
+))
+/*
+if(module.main && exports[cmd])
+  document.body.appendChild(exports[cmd]())
 else {
-  console.log(Object.keys(exports))
+  console.log('expected command:'+Object.keys(exports).join(', ') + ' but got:'+cmd)
+//  window.close()
+  //process.exit(1)
 }
 
-
-
-
-
-
-
-
-
+*/
