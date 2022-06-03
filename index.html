@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>---</title>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport" />
+<meta charset="utf-8"></head>
+<body></body>
+<script>(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+
+},{}],2:[function(require,module,exports){
+// shim for using process in browser
+var process = module.exports = {};
+
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+
+var cachedSetTimeout;
+var cachedClearTimeout;
+
+function defaultSetTimout() {
+    throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout () {
+    throw new Error('clearTimeout has not been defined');
+}
+(function () {
+    try {
+        if (typeof setTimeout === 'function') {
+            cachedSetTimeout = setTimeout;
+        } else {
+            cachedSetTimeout = defaultSetTimout;
+        }
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
+    }
+    try {
+        if (typeof clearTimeout === 'function') {
+            cachedClearTimeout = clearTimeout;
+        } else {
+            cachedClearTimeout = defaultClearTimeout;
+        }
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
+    }
+} ())
+function runTimeout(fun) {
+    if (cachedSetTimeout === setTimeout) {
+        //normal enviroments in sane situations
+        return setTimeout(fun, 0);
+    }
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
+        return setTimeout(fun, 0);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedSetTimeout(fun, 0);
+    } catch(e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+            return cachedSetTimeout.call(null, fun, 0);
+        } catch(e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+            return cachedSetTimeout.call(this, fun, 0);
+        }
+    }
+
+
+}
+function runClearTimeout(marker) {
+    if (cachedClearTimeout === clearTimeout) {
+        //normal enviroments in sane situations
+        return clearTimeout(marker);
+    }
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
+        return clearTimeout(marker);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedClearTimeout(marker);
+    } catch (e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+            return cachedClearTimeout.call(null, marker);
+        } catch (e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+            return cachedClearTimeout.call(this, marker);
+        }
+    }
+
+
+
+}
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = runTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    runClearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        runTimeout(drainQueue);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+process.prependListener = noop;
+process.prependOnceListener = noop;
+
+process.listeners = function (name) { return [] }
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],3:[function(require,module,exports){
+(function (process){(function (){
+var h = require('hyperscript')
+var random = require('network-animator/random')
+var animate = require('network-animator/animate')
+var G = require('graphreduce')
+var h = require('hyperscript')
+var random = require('network-animator/random')
+
+var W = 600, H = 600
+
+function delay (fn) {
+  setTimeout(fn, 1000)
+}
+
+function canvas () {
+  return h('canvas', {width: W, height: H})
+}
+
+function starter (fn) {
+  return function () {
+    return fn(()=>false)
+
+  }
+  var stopped = false
+  function stop () {
+    return stopped
+  }
+  return function () {
+    var d = h('div')
+    d.addEventListener('focus', function () {
+      stopped = false
+      d.innerHTML = ''
+      d.appendChild(fn(stop))
+    })
+    d.addEventListener('blur', function () {
+      stopped = true
+    })
+    return d
+  }
+}
+
+function circular (n, center, radius) {
+  var a = {}, theta = Math.PI*2/n
+  for(var i = 0; i < n; i++)
+    a[i] = {x: center.x + Math.cos(i*theta)*radius, y: center.y + Math.sin(i*theta)*radius}
+  return a
+}
+
+function central (N, center, radius) {
+  var loc = circular(N-1, center, radius)
+
+  for(var i = N - 1; i > 0; i--)
+    loc[i] = loc[i-1]
+
+  loc[0] = center
+  return loc
+}
+
+exports.centralized = starter(function (stop) {
+  var c = canvas() //
+  var g = {}
+  var N = 200
+  for(var i = 0; i < N; i++) {
+    G.addEdge(g, 0, i)
+    G.addEdge(g, i, 0)
+  }
+
+//  var loc = random.locations(N, c.width, c.height)
+  var loc = central(N, {x:c.width/2, y:c.height/2}, Math.min(c.width/2, c.height/2)*0.9)
+  var label = h('label')
+
+  animate(g, loc, c.getContext('2d'), function next (_, packets) {
+    var e = 0
+    for(var i in packets)
+      if(packets[i].extra) {
+        e ++
+        delete g[packets[i].from][packets[i].to]
+        delete g[packets[i].to][packets[i].from]
+      }
+    label.textContent = e + '/' + packets.length
+    delay(function () { animate(g, loc, c.getContext('2d'), next) })
+  })
+  return h('div', c, label)
+})
+
+exports.random = starter(function (stop) {
+
+  var c = canvas() //h('canvas', {width: W, height: H})
+  var N = 200
+  var g = random.graph(N, 3)
+  var loc = random.locations(200, c.width, c.height)
+//  var loc = circular(N, {x:c.width/2, y:c.height/2}, Math.min(c.width/2, c.height/2)*0.9)
+  var label = h('label')
+
+  animate(g, loc, c.getContext('2d'), function next (_, packets) {
+    var e = 0
+    for(var i in packets)
+      if(packets[i].extra) e ++
+    label.textContent = e + '/' + packets.length
+    delay(function () { animate(g, loc, c.getContext('2d'), next) })
+  })
+  return h('div', c, label)
+})
+
+exports.grid = starter(function (stop) {
+
+  var c = canvas() //h('canvas', {width: W, height: H})
+  var N = 200
+  var g = {}
+  var loc = {}
+  for(var i = 0; i < N; i++) {
+    if(i%10)
+      G.addEdge(g, i, (N+i-1)%N)
+    if((i%10) < 9)
+      G.addEdge(g, i, (N+i+1)%N)
+    if(i > 10)
+      G.addEdge(g, i, (N+i-10)%N)
+    if(i < N - 10)
+      G.addEdge(g, i, (i+10)%N)
+
+    loc[i] = {x: (i%10)*c.width/10, y: Math.floor(i/10)*c.height/20}
+  }
+
+
+//  var g = random.graph(N, 3)
+//  var loc = random.locations(200, c.width, c.height)
+//  var loc = circular(N, {x:c.width/2, y:c.height/2}, Math.min(c.width/2, c.height/2)*0.9)
+  var label = h('label')
+
+  animate(g, loc, c.getContext('2d'), function next (_, packets) {
+    var e = 0
+    for(var i in packets)
+      if(packets[i].extra) e ++
+    label.textContent = e + '/' + packets.length
+    delay(function () { animate(g, loc, c.getContext('2d'), next) })
+  })
+  return h('div', c, label)
+
+})
+
+exports.spanning = starter(function () {
+  var c = canvas() //h('canvas', {width: W, height: H})
+  var g = random.graph(200, 3)
+  var loc = random.locations(200, c.width, c.height)
+  var label = h('label')
+
+  animate(g, loc, c.getContext('2d'), function next (_, packets) {
+    var e = 0
+    for(var i in packets)
+      if(packets[i].extra) {
+        e ++
+        delete g[packets[i].from][packets[i].to]
+        delete g[packets[i].to][packets[i].from]
+      }
+    label.textContent = e + '/' + packets.length
+    delay(function () { animate(g, loc, c.getContext('2d'), next) })
+  })
+  return h('div', c, label)
+
+})
+exports.fragile = starter(function () {
+  var N = 200
+  var c = canvas()
+  var loc = random.locations(N, c.width, c.height)
+  var label = h('label')
+
+  //;(function next () {
+    var g = random.graph(N, 2)
+
+    animate(g, loc, c.getContext('2d'), function next (_, packets) {
+      var e = 0
+      for(var i in packets)
+        if(packets[i].extra) {
+          e ++
+          delete g[packets[i].from][packets[i].to]
+          delete g[packets[i].to][packets[i].from]
+        }
+
+      //randomly delete some nodes
+      var d
+      for(var i = 0; i < 1; i++) {
+        var d = ~~(Math.random()*N)
+        delete g[d]
+        for(var i in g[d])
+          delete g[i][d]
+      }
+
+      label.textContent = e + '/' + packets.length
+      if(!stop()) animate(g, loc, c.getContext('2d'), next)
+//      delay(function () { animate(g, loc, c.getContext('2d'), next) })
+    })
+
+  //})()
+  return h('div', c, label)
+
+})
+
+var cmd = process.argv[2]
+
+
+document.body.appendChild(h('div',
+  Object.keys(exports).map(name => {
+    return h('div',
+      h('h1', name),
+      exports[name](),
+      h('hr')
+    )
+  })
+))
+/*
+if(module.main && exports[cmd])
+  document.body.appendChild(exports[cmd]())
+else {
+  console.log('expected command:'+Object.keys(exports).join(', ') + ' but got:'+cmd)
+//  window.close()
+  //process.exit(1)
+}
+
+*/
+}).call(this)}).call(this,require('_process'))
+},{"_process":2,"graphreduce":6,"hyperscript":7,"network-animator/animate":9,"network-animator/random":10}],4:[function(require,module,exports){
+/*!
+ * Cross-Browser Split 1.1.1
+ * Copyright 2007-2012 Steven Levithan <stevenlevithan.com>
+ * Available under the MIT License
+ * ECMAScript compliant, uniform cross-browser split method
+ */
+
+/**
+ * Splits a string into an array of strings using a regex or string separator. Matches of the
+ * separator are not included in the result array. However, if `separator` is a regex that contains
+ * capturing groups, backreferences are spliced into the result each time `separator` is matched.
+ * Fixes browser bugs compared to the native `String.prototype.split` and can be used reliably
+ * cross-browser.
+ * @param {String} str String to split.
+ * @param {RegExp|String} separator Regex or string to use for separating the string.
+ * @param {Number} [limit] Maximum number of items to include in the result array.
+ * @returns {Array} Array of substrings.
+ * @example
+ *
+ * // Basic use
+ * split('a b c d', ' ');
+ * // -> ['a', 'b', 'c', 'd']
+ *
+ * // With limit
+ * split('a b c d', ' ', 2);
+ * // -> ['a', 'b']
+ *
+ * // Backreferences in result array
+ * split('..word1 word2..', /([a-z]+)(\d+)/i);
+ * // -> ['..', 'word', '1', ' ', 'word', '2', '..']
+ */
+module.exports = (function split(undef) {
+
+  var nativeSplit = String.prototype.split,
+    compliantExecNpcg = /()??/.exec("")[1] === undef,
+    // NPCG: nonparticipating capturing group
+    self;
+
+  self = function(str, separator, limit) {
+    // If `separator` is not a regex, use `nativeSplit`
+    if (Object.prototype.toString.call(separator) !== "[object RegExp]") {
+      return nativeSplit.call(str, separator, limit);
+    }
+    var output = [],
+      flags = (separator.ignoreCase ? "i" : "") + (separator.multiline ? "m" : "") + (separator.extended ? "x" : "") + // Proposed for ES6
+      (separator.sticky ? "y" : ""),
+      // Firefox 3+
+      lastLastIndex = 0,
+      // Make `global` and avoid `lastIndex` issues by working with a copy
+      separator = new RegExp(separator.source, flags + "g"),
+      separator2, match, lastIndex, lastLength;
+    str += ""; // Type-convert
+    if (!compliantExecNpcg) {
+      // Doesn't need flags gy, but they don't hurt
+      separator2 = new RegExp("^" + separator.source + "$(?!\\s)", flags);
+    }
+    /* Values for `limit`, per the spec:
+     * If undefined: 4294967295 // Math.pow(2, 32) - 1
+     * If 0, Infinity, or NaN: 0
+     * If positive number: limit = Math.floor(limit); if (limit > 4294967295) limit -= 4294967296;
+     * If negative number: 4294967296 - Math.floor(Math.abs(limit))
+     * If other: Type-convert, then use the above rules
+     */
+    limit = limit === undef ? -1 >>> 0 : // Math.pow(2, 32) - 1
+    limit >>> 0; // ToUint32(limit)
+    while (match = separator.exec(str)) {
+      // `separator.lastIndex` is not reliable cross-browser
+      lastIndex = match.index + match[0].length;
+      if (lastIndex > lastLastIndex) {
+        output.push(str.slice(lastLastIndex, match.index));
+        // Fix browsers whose `exec` methods don't consistently return `undefined` for
+        // nonparticipating capturing groups
+        if (!compliantExecNpcg && match.length > 1) {
+          match[0].replace(separator2, function() {
+            for (var i = 1; i < arguments.length - 2; i++) {
+              if (arguments[i] === undef) {
+                match[i] = undef;
+              }
+            }
+          });
+        }
+        if (match.length > 1 && match.index < str.length) {
+          Array.prototype.push.apply(output, match.slice(1));
+        }
+        lastLength = match[0].length;
+        lastLastIndex = lastIndex;
+        if (output.length >= limit) {
+          break;
+        }
+      }
+      if (separator.lastIndex === match.index) {
+        separator.lastIndex++; // Avoid an infinite loop
+      }
+    }
+    if (lastLastIndex === str.length) {
+      if (lastLength || !separator.test("")) {
+        output.push("");
+      }
+    } else {
+      output.push(str.slice(lastLastIndex));
+    }
+    return output.length > limit ? output.slice(0, limit) : output;
+  };
+
+  return self;
+})();
+
+},{}],5:[function(require,module,exports){
+// contains, add, remove, toggle
+var indexof = require('indexof')
+
+module.exports = ClassList
+
+function ClassList(elem) {
+    var cl = elem.classList
+
+    if (cl) {
+        return cl
+    }
+
+    var classList = {
+        add: add
+        , remove: remove
+        , contains: contains
+        , toggle: toggle
+        , toString: $toString
+        , length: 0
+        , item: item
+    }
+
+    return classList
+
+    function add(token) {
+        var list = getTokens()
+        if (indexof(list, token) > -1) {
+            return
+        }
+        list.push(token)
+        setTokens(list)
+    }
+
+    function remove(token) {
+        var list = getTokens()
+            , index = indexof(list, token)
+
+        if (index === -1) {
+            return
+        }
+
+        list.splice(index, 1)
+        setTokens(list)
+    }
+
+    function contains(token) {
+        return indexof(getTokens(), token) > -1
+    }
+
+    function toggle(token) {
+        if (contains(token)) {
+            remove(token)
+            return false
+        } else {
+            add(token)
+            return true
+        }
+    }
+
+    function $toString() {
+        return elem.className
+    }
+
+    function item(index) {
+        var tokens = getTokens()
+        return tokens[index] || null
+    }
+
+    function getTokens() {
+        var className = elem.className
+
+        return filter(className.split(" "), isTruthy)
+    }
+
+    function setTokens(list) {
+        var length = list.length
+
+        elem.className = list.join(" ")
+        classList.length = length
+
+        for (var i = 0; i < list.length; i++) {
+            classList[i] = list[i]
+        }
+
+        delete list[length]
+    }
+}
+
+function filter (arr, fn) {
+    var ret = []
+    for (var i = 0; i < arr.length; i++) {
+        if (fn(arr[i])) ret.push(arr[i])
+    }
+    return ret
+}
+
+function isTruthy(value) {
+    return !!value
+}
+
+},{"indexof":8}],6:[function(require,module,exports){
+
+function each(obj, iter) {
+  for(var k in obj) iter(k, obj[k])
+}
+function hasEdge (g, f, t) {
+  return g[f] && Object.hasOwnProperty(g[f], t)
+}
+
+function addNode(g, n) {
+  g[n] = g[n] || {}
+  return g
+}
+
+function get (g, f, t) {
+  if(t == null) throw new Error('not implemented')
+  return g[f] && g[f][t] || null
+}
+
+function addEdge (g, from, to, data) {
+
+  (g[from] = g[from] || {})[to] = (data === undefined ? true : data)
+  return g
+}
+
+function removeEdge (g, from, to) {
+  if('object' === typeof g[from]) delete g[from][to]
+  return g
+}
+
+function eachEdge (g, iter) {
+  each(g, function (from, n) {
+    each(n, function (to, data) {
+      iter(from, to, data)
+    })
+  })
+}
+
+//get a random node
+function randomNode (g) {
+  var keys = Object.keys(g)
+  return keys[~~(keys.length*Math.random())]
+}
+
+//add another subgraph
+function addGraph (g1, g2) {
+  eachEdge(g2, function (from, to, data) {
+    addEdge(g1, from, to, data)
+  })
+  return g1
+}
+
+
+//
+// graph generators
+//
+
+function random (nodes, edges, prefix) {
+  prefix = prefix || '#'
+  if(isNaN(+nodes)) throw new Error('nodes must be a number')
+  if(isNaN(+edges)) throw new Error('edges must be a number')
+
+  var n = 0, g = {}
+
+  function rand(n) {
+    return prefix+~~(Math.random()*n)
+  }
+
+  for(var i = 0; i < nodes; i++)
+    addNode(g, prefix+i)
+
+  for(var i = 0; i < edges; i++) {
+    var a = rand(nodes), b = rand(nodes)
+    addEdge(g, a, b)
+    addEdge(g, b, a)
+  }
+
+  return g
+}
+
+
+exports.random = random
+exports.each = each
+exports.addEdge = addEdge
+exports.hasEdge = hasEdge
+exports.removeEdge = removeEdge
+exports.eachEdge = eachEdge
+exports.addGraph = addGraph
+exports.get = get
+
+function count(obj) {
+  var c = 0
+  for(var k in obj) c++
+  return c
+}
+
+exports.rank = function (g, opts) {
+  opts = opts || {}
+
+  var ranks = {}, links = {}, _ranks = {}
+  var N = count(g)
+  var iterations = opts.iterations || 1
+  var damping = opts.damping || 0.85
+  var init = (1 - damping) / N
+
+  //initialize
+  each(g, function (k, n) {
+    ranks[k] = 1/N; _ranks[k] = init
+    links[k] = count(n)
+  })
+
+  while(iterations --> 0) {
+
+    //iteration
+    each(g, function (j, n) {
+      var r = damping*(ranks[j]/links[j])
+      each(n, function (k) { _ranks[k] += r })
+    })
+
+    //reset
+    for(var k in ranks)
+      ranks[k] = init
+
+    var __ranks = ranks
+    ranks = _ranks
+    _ranks = __ranks
+  }
+  return ranks
+}
+
+exports.hops = function (g, start, initial, max, seen) {
+  if(!g[start]) return {}
+  var visited = {}
+  var queue = [start]
+  visited[start] = initial
+  while(queue.length) {
+    var node = queue.shift()
+    var h = visited[node]
+    for(var k in g[node]) {
+      if(
+        visited[k] == null
+      && (!seen || (seen[k] == null || seen[k] > h+1))
+      && h < max
+      ) {
+        queue.push(k)
+        visited[k] = h + 1
+      }
+    }
+  }
+  return visited
+}
+
+
+},{}],7:[function(require,module,exports){
+var split = require('browser-split')
+var ClassList = require('class-list')
+
+var w = typeof window === 'undefined' ? require('html-element') : window
+var document = w.document
+var Text = w.Text
+
+function context () {
+
+  var cleanupFuncs = []
+
+  function h() {
+    var args = [].slice.call(arguments), e = null
+    function item (l) {
+      var r
+      function parseClass (string) {
+        // Our minimal parser doesn’t understand escaping CSS special
+        // characters like `#`. Don’t use them. More reading:
+        // https://mathiasbynens.be/notes/css-escapes .
+
+        var m = split(string, /([\.#]?[^\s#.]+)/)
+        if(/^\.|#/.test(m[1]))
+          e = document.createElement('div')
+        forEach(m, function (v) {
+          var s = v.substring(1,v.length)
+          if(!v) return
+          if(!e)
+            e = document.createElement(v)
+          else if (v[0] === '.')
+            ClassList(e).add(s)
+          else if (v[0] === '#')
+            e.setAttribute('id', s)
+        })
+      }
+
+      if(l == null)
+        ;
+      else if('string' === typeof l) {
+        if(!e)
+          parseClass(l)
+        else
+          e.appendChild(r = document.createTextNode(l))
+      }
+      else if('number' === typeof l
+        || 'boolean' === typeof l
+        || l instanceof Date
+        || l instanceof RegExp ) {
+          e.appendChild(r = document.createTextNode(l.toString()))
+      }
+      //there might be a better way to handle this...
+      else if (isArray(l))
+        forEach(l, item)
+      else if(isNode(l))
+        e.appendChild(r = l)
+      else if(l instanceof Text)
+        e.appendChild(r = l)
+      else if ('object' === typeof l) {
+        for (var k in l) {
+          if('function' === typeof l[k]) {
+            if(/^on\w+/.test(k)) {
+              (function (k, l) { // capture k, l in the closure
+                if (e.addEventListener){
+                  e.addEventListener(k.substring(2), l[k], false)
+                  cleanupFuncs.push(function(){
+                    e.removeEventListener(k.substring(2), l[k], false)
+                  })
+                }else{
+                  e.attachEvent(k, l[k])
+                  cleanupFuncs.push(function(){
+                    e.detachEvent(k, l[k])
+                  })
+                }
+              })(k, l)
+            } else {
+              // observable
+              e[k] = l[k]()
+              cleanupFuncs.push(l[k](function (v) {
+                e[k] = v
+              }))
+            }
+          }
+          else if(k === 'style') {
+            if('string' === typeof l[k]) {
+              e.style.cssText = l[k]
+            }else{
+              for (var s in l[k]) (function(s, v) {
+                if('function' === typeof v) {
+                  // observable
+                  e.style.setProperty(s, v())
+                  cleanupFuncs.push(v(function (val) {
+                    e.style.setProperty(s, val)
+                  }))
+                } else
+                  var match = l[k][s].match(/(.*)\W+!important\W*$/);
+                  if (match) {
+                    e.style.setProperty(s, match[1], 'important')
+                  } else {
+                    e.style.setProperty(s, l[k][s])
+                  }
+              })(s, l[k][s])
+            }
+          } else if(k === 'attrs') {
+            for (var v in l[k]) {
+              e.setAttribute(v, l[k][v])
+            }
+          }
+          else if (k.substr(0, 5) === "data-") {
+            e.setAttribute(k, l[k])
+          } else {
+            e[k] = l[k]
+          }
+        }
+      } else if ('function' === typeof l) {
+        //assume it's an observable!
+        var v = l()
+        e.appendChild(r = isNode(v) ? v : document.createTextNode(v))
+
+        cleanupFuncs.push(l(function (v) {
+          if(isNode(v) && r.parentElement)
+            r.parentElement.replaceChild(v, r), r = v
+          else
+            r.textContent = v
+        }))
+      }
+
+      return r
+    }
+    while(args.length)
+      item(args.shift())
+
+    return e
+  }
+
+  h.cleanup = function () {
+    for (var i = 0; i < cleanupFuncs.length; i++){
+      cleanupFuncs[i]()
+    }
+    cleanupFuncs.length = 0
+  }
+
+  return h
+}
+
+var h = module.exports = context()
+h.context = context
+
+function isNode (el) {
+  return el && el.nodeName && el.nodeType
+}
+
+function forEach (arr, fn) {
+  if (arr.forEach) return arr.forEach(fn)
+  for (var i = 0; i < arr.length; i++) fn(arr[i], i)
+}
+
+function isArray (arr) {
+  return Object.prototype.toString.call(arr) == '[object Array]'
+}
+
+
+
+},{"browser-split":4,"class-list":5,"html-element":1}],8:[function(require,module,exports){
+
+var indexOf = [].indexOf;
+
+module.exports = function(arr, obj){
+  if (indexOf) return arr.indexOf(obj);
+  for (var i = 0; i < arr.length; ++i) {
+    if (arr[i] === obj) return i;
+  }
+  return -1;
+};
+},{}],9:[function(require,module,exports){
+var G = require('graphreduce')
+
+module.exports = function animate (g, locations, ctx, cb) {
+  var seen = {}, packets = []
+  function draw (time) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+    ctx.beginPath()
+
+    ctx.strokeStyle = 'hsla(0,0%,0%,0.5)'
+    ctx.beginPath()
+    G.eachEdge(g, function (a, b) {
+      if(locations[b] && locations[a]) {
+        ctx.moveTo(locations[a].x, locations[a].y)
+        ctx.lineTo(locations[b].x, locations[b].y)
+      }
+    })
+    ctx.closePath()
+    ctx.stroke()
+    for(var i in locations) {
+      ctx.fillStyle = seen[i] ? 'green' : 'purple'
+      ctx.fillRect(locations[i].x-4, locations[i].y-4, 8, 8)
+    }
+
+    packets.forEach(function (pkt) {
+      var A = locations[pkt.from], B = locations[pkt.to]
+      var l = dist(A, B)
+      var elapsed = time - pkt.time
+      if(pkt.end > time) {
+        var p = elapsed/l
+        var C = {
+          x: A.x + ((B.x-A.x)*p),
+          y: A.y + ((B.y-A.y)*p),
+        }
+
+        ctx.fillStyle = pkt.extra ? 'red' : 'black'
+        ctx.fillRect(C.x-2, C.y-2, 4, 4)
+      }
+
+    })
+
+  }
+
+  var end = -1
+  function broadcast (j, i) {
+    for(var k in g[j]) {
+      if(k != i) {
+        var e = seen[j] + dist(locations[j], locations[k])
+        end = Math.max(end, e)
+        packets.push({from: j, to: k, time: seen[j], end: e})
+      }
+    }
+
+  }
+
+  var seen = {}
+  draw()
+
+  function diff (a, b) {
+    return a > b ? a - b : b - a
+  }
+
+  function dist (a, b) {
+    return Math.sqrt(Math.pow(diff(a.x,b.x), 2)+Math.pow(diff(a.y,b.y), 2)) 
+  }
+
+  function flood (time) {
+    for(var i in seen) {
+      var start = locations[i]
+      for(var j in g[i]) {
+        //NOTE, sometimes this might measure the wrong message arriving first...
+        var d = dist(start, locations[j])
+        //calculate whether this packet has had time to arrive
+        if(!seen[j] && d < time - seen[i]) {
+          seen[j] = seen[i]+d
+          broadcast(j, i)
+        }
+        else
+        if(seen[j] > seen[i] + d && d < time - seen[i]) {
+          seen[j] = seen[i]+d
+        }
+      }
+    }
+    packets.forEach(function (pkt) {
+      if(seen[pkt.to] < pkt.end && !pkt.extra) {//packet has already arrived
+        pkt.extra = true
+      }
+    })
+  }
+
+  seen[0] = 1
+  broadcast(0, 0)
+  var start = Date.now()
+
+  function frame(time) {
+    flood(time); draw(time)
+  }
+  frame(1)
+  var int = setInterval(function () {
+    var time = ((Date.now() - start) + 1)/2
+    frame(time)
+    if(time > end) {
+//      console.log('time', time, end)
+//      console.log(1 - packets.filter(function (e) { return e.extra }).length/packets.length)
+      clearInterval(int)
+      setTimeout(function () {
+      cb(null, packets, end)
+      }, 50)
+    }
+  }, 20)
+
+}
+
+
+
+},{"graphreduce":6}],10:[function(require,module,exports){
+var G = require('graphreduce')
+
+//generate a random graph
+
+exports.graph = function (N, K) {
+  var g = {}
+  for(var i = 0; i < N; i++) {
+    for(var j = 0; j < K; j++) {
+      var a = ~~(Math.random()*i)
+      g = G.addEdge(g, a, i)
+      g = G.addEdge(g, i, a)
+    }
+  }
+  return g
+}
+
+exports.locations = function (N, W, H) {
+  locations = {}
+  for(var i = 0; i < N; i++)
+    locations[i] = {x: Math.random()*W, y: Math.random()*H}
+  return locations
+}
+
+},{"graphreduce":6}]},{},[3]);
+</script>
+</html>
